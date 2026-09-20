@@ -512,6 +512,17 @@ mod tests {
             }
             checked += 1;
         }
-        assert!(checked >= 3, "expected shipped templates, found {checked}");
+        // Only the built-in template is tracked in git; the user's own
+        // workflows live locally as `*.private.json` and are therefore absent
+        // on a fresh checkout. Validate every file that is present instead of
+        // demanding a minimum count.
+        assert!(
+            checked >= 1,
+            "expected the built-in template, found {checked}"
+        );
+        assert!(
+            directory.join("txt2img.json").is_file(),
+            "the built-in txt2img template must ship with the app"
+        );
     }
 }
