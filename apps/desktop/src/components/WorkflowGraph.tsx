@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from "react";
-import { RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Maximize2, Minimize2, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 
 export type NodeOverrides = Record<string, Record<string, unknown>>;
 
@@ -88,6 +88,32 @@ export function clampViewport(
     ...viewport,
     x: Math.min(margin, Math.max(minX, viewport.x)),
     y: Math.min(margin, Math.max(minY, viewport.y)),
+  };
+}
+
+/** Scale the graph so it fits the canvas and centre it (never zooms past 100%). */
+export function fitViewport(
+  layout: { width: number; height: number },
+  canvas: { width: number; height: number },
+  padding = 24,
+): Viewport {
+  if (layout.width <= 0 || layout.height <= 0 || canvas.width <= 0 || canvas.height <= 0) {
+    return { x: padding, y: padding, zoom: 1 };
+  }
+  const zoom = Math.min(
+    1,
+    Math.max(
+      0.4,
+      Math.min(
+        (canvas.width - padding * 2) / layout.width,
+        (canvas.height - padding * 2) / layout.height,
+      ),
+    ),
+  );
+  return {
+    zoom,
+    x: Math.max(padding, (canvas.width - layout.width * zoom) / 2),
+    y: Math.max(padding, (canvas.height - layout.height * zoom) / 2),
   };
 }
 
@@ -228,6 +254,8 @@ export function WorkflowGraph({
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<{ origin: Viewport; pointerX: number; pointerY: number } | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const layout = useMemo(() => layoutWorkflow(template), [template]);
 
   const canvasSize = () => ({
@@ -243,6 +271,31 @@ export function WorkflowGraph({
         canvasSize(),
       ),
     );
+  };
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(document.fullscreenElement === panelRef.current);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+
+  const fitNow = () => setViewport(fitViewport(layout, canvasSize()));
+
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+        return;
+      }
+      const node = panelRef.current;
+      if (!node) return;
+      await node.requestFullscreen();
+      // The canvas is much larger now: fit after the browser relayouts.
+      window.setTimeout(fitNow, 80);
+    } catch {
+      // Browsers may refuse fullscreen (e.g. another element owns it); the
+      // graph stays usable in the page, so failing silently is fine here.
+    }
   };
 
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -284,7 +337,7 @@ export function WorkflowGraph({
   }
 
   return (
-    <div className="workflow-graph">
+    <div className={`workflow-graph${isFullscreen ? " fullscreen" : ""}`} ref={panelRef}>
       <div className="workflow-graph-toolbar">
         <span className="eyebrow">
           {layout.nodes.length} 个节点 · {layout.edges.length} 条连线
@@ -326,6 +379,15 @@ export function WorkflowGraph({
         >
           重置视图
         </button>
+        <button
+          type="button"
+          className="ghost-button compact workflow-graph-fullscreen"
+          onClick={() => void toggleFullscreen()}
+          title={isFullscreen ? "退出全屏（Esc）" : "全屏查看（也可双击画布）"}
+        >
+          {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          {isFullscreen ? "退出全屏" : "全屏"}
+        </button>
         <small>
           右键（或中键）拖动平移，滚轮上下移动，Shift+滚轮左右，Ctrl+滚轮缩放；
           连线按“节点输出 → 具体输入行”绘制。
@@ -338,6 +400,12 @@ export function WorkflowGraph({
         onPointerMove={moveDrag}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
+        onDoubleClick={(event) => {
+          // Double-clicking a node edits it; only the background toggles
+          // fullscreen.
+          if ((event.target as HTMLElement).closest(".workflow-node") !== null) return;
+          void toggleFullscreen();
+        }}
         onContextMenu={(event) => event.preventDefault()}
         onWheel={(event) => {
           event.preventDefault();

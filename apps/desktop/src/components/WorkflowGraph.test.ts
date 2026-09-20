@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   clampViewport,
+  fitViewport,
   graphNodesOf,
   layoutWorkflow,
   linkOf,
@@ -138,5 +139,25 @@ describe("workflow viewport", () => {
     const farLeft = clampViewport({ x: -9999, y: -9999, zoom: 1 }, layout, canvas);
     expect(farLeft.x).toBeGreaterThanOrEqual(canvas.width - layout.width - 120);
     expect(farLeft.y).toBeGreaterThanOrEqual(canvas.height - layout.height - 120);
+  });
+
+  it("fits and centres the graph for fullscreen", () => {
+    const layout = { width: 1600, height: 900 };
+    const canvas = { width: 800, height: 600 };
+
+    const fitted = fitViewport(layout, canvas);
+
+    expect(fitted.zoom).toBeLessThan(1);
+    expect(layout.width * fitted.zoom).toBeLessThanOrEqual(canvas.width);
+    expect(layout.height * fitted.zoom).toBeLessThanOrEqual(canvas.height);
+    // Centred within the canvas.
+    expect(fitted.x).toBeGreaterThan(0);
+    expect(fitted.y).toBeGreaterThan(0);
+  });
+
+  it("does not zoom past 100% for a small graph", () => {
+    const fitted = fitViewport({ width: 200, height: 120 }, { width: 1200, height: 800 });
+
+    expect(fitted.zoom).toBe(1);
   });
 });

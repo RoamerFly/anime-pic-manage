@@ -257,6 +257,31 @@
   cursor: grabbing;
 }
 
+.workflow-graph-fullscreen {
+  margin-left: auto;
+}
+
+.workflow-graph:fullscreen {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100vw;
+  height: 100vh;
+  padding: 14px 16px;
+  background: #f4f6fb;
+}
+
+.workflow-graph:fullscreen .workflow-graph-canvas {
+  flex: 1;
+  height: auto;
+  max-height: none;
+}
+
+.workflow-graph:fullscreen .workflow-graph-toolbar small,
+.workflow-graph:fullscreen .workflow-graph-toolbar .eyebrow {
+  font-size: calc(12.5 * var(--ui-font-step, 1px));
+}
+
 .workflow-graph-viewport {
   position: absolute;
   top: 0;
