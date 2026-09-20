@@ -47,10 +47,11 @@ AnimePicManage\
 | 模型缓存 `data\hf-cache` | 勾选 | 打标模型、参考匹配模型与相关缓存，约 700MB，可重新下载 |
 | 识别模型 `models\` | 勾选 | 角色识别与头部检测模型，约 1.1GB，可重新下载 |
 | 训练与出图产物 `output\` | **不勾选** | LoRA、训练集、生成图，删掉无法恢复 |
+| 数据库与人工矫正记录 `data\` | **不勾选** | 标注结果、设置与日志，删掉无法恢复；四项全选时安装目录会被完整删除 |
 
-程序本体、`app\`（含一键下载的 CUDA 运行库）与 `resources\` 一定会被删除；数据库、人工矫正结果与设置都在 `data\` 内，取消勾选的项目会原样保留，重新安装后直接继续用。
+程序本体、`app\`（含一键下载的 CUDA 运行库）、`resources\` 与 `temp\` 一定会被删除；取消勾选的项目会原样保留，重新安装后直接继续用。
 
-静默卸载 `uninstall.exe /S` 默认**只删程序、不碰用户数据**；确实要清理时显式传参：`uninstall.exe /S /DELCACHE /DELMODELS /DELOUTPUT`。
+静默卸载 `uninstall.exe /S` 默认**只删程序、不碰用户数据**；确实要清理时显式传参：`uninstall.exe /S /DELCACHE /DELMODELS /DELOUTPUT /DELDATA`。
 
 ### 从源码运行
 

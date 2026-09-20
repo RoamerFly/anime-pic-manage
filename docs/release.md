@@ -24,10 +24,10 @@
 `apps/desktop/src-tauri/installer/hooks.nsh` 通过 Tauri 的 `bundle.windows.nsis.installerHooks` 注入，负责三件事：
 
 1. **安装后补齐目录**：创建 `data\`、`models\`、`output\{generated,loras,datasets}`、`temp\`，让用户装完就能看到落点。
-2. **卸载清理选项**：在「确认卸载」之前插入自定义页，三个复选框——模型缓存 `data\hf-cache`（默认勾选）、识别模型 `models\`（默认勾选）、训练与出图产物 `output\`（默认不勾选）。
-3. **清理逻辑**：`NSIS_HOOK_POSTUNINSTALL` 里按选择删除，并始终清理 `app\`（含一键下载的 CUDA 运行库）；数据库与人工矫正结果在 `data\` 内，取消勾选即原样保留，`$INSTDIR` 不会被强行删除。
+2. **卸载清理选项**：在「确认卸载」之前插入自定义页，四个复选框——模型缓存 `data\hf-cache`（默认勾选）、识别模型 `models\`（默认勾选）、训练与出图产物 `output\`（默认不勾选）、数据库与人工矫正记录 `data\`（默认不勾选）。
+3. **清理逻辑**：`NSIS_HOOK_POSTUNINSTALL` 里按选择删除，并始终清理 `app\`（含一键下载的 CUDA 运行库）与 `temp\`；取消勾选的数据原样保留，`$INSTDIR` 不会被强行删空，四项全选时安装目录会被完整删除。
 
-静默卸载 `uninstall.exe /S` **默认只删程序**，要清理时显式传 ` /DELCACHE /DELMODELS /DELOUTPUT`。
+静默卸载 `uninstall.exe /S` **默认只删程序**，要清理时显式传 ` /DELCACHE /DELMODELS /DELOUTPUT /DELDATA`。
 
 「沿用上次安装目录」由 Tauri 模板自带：安装时把 `$INSTDIR` 写进 `HKCU\Software\<厂商>\<产品名>`，重装时 `RestorePreviousInstallLocation` 读回，因此 `tauri.conf.json` 必须保留 `bundle.publisher`。
 
