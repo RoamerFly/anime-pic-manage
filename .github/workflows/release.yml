@@ -128,6 +128,8 @@ jobs:
       - name: Build the CPU portable package
         shell: pwsh
         run: |
+          # 便携包脚本只负责打包，桌面程序要先编译出来（与本地 build.bat 一致）。
+          pnpm --filter @anime-pic-manage/desktop exec tauri build --no-bundle
           ./scripts/package_windows.ps1 -ProjectRoot . -DistName dist_windows
 
       - name: Build the CPU installer
