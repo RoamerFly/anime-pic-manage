@@ -1,0 +1,26 @@
+{
+  "id": "animetimm-resnet101-dbv4-full",
+  "kind": "character_recognizer",
+  "adapter": "animetimm_onnx",
+  "format": "onnx",
+  "version": "dbv4-full",
+  "model_file": "model.onnx",
+  "labels_file": "selected_tags.csv",
+  "preprocess_file": "preprocess.json",
+  "sha256": "",
+  "input": {"width": 384, "height": 384},
+  "supported_devices": ["cpu", "cuda"],
+  "input_name": "input",
+  "input_layout": "nchw",
+  "output_name": "prediction",
+  "output_activation": "none",
+  "categories_file": "categories.json",
+  "thresholds_file": "thresholds.csv",
+  "character_category": 4,
+  "tag_count": 12476,
+  "model_outputs": {
+    "embedding": {"size": 2048},
+    "logits": {"size": 12476},
+    "prediction": {"size": 12476}
+  }
+}

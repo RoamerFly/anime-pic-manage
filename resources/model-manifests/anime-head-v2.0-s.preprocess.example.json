@@ -1,0 +1,16 @@
+{
+  "width": 640,
+  "height": 640,
+  "mean": [0.0, 0.0, 0.0],
+  "std": [1.0, 1.0, 1.0],
+  "interpolation": "pillow_default",
+  "color_mode": "RGB",
+  "layout": "nchw",
+  "output_activation": "none",
+  "crop_mode": "fit",
+  "source": "dghs-imgutils:imgutils.generic.yolo._image_preprocess + imgutils.data.rgb_encode",
+  "resize_mode": "dghs_image_preprocess",
+  "scale": "0_1",
+  "allow_dynamic": false,
+  "align": 32
+}

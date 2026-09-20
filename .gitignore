@@ -1,0 +1,116 @@
+# JavaScript / pnpm
+node_modules/
+.pnpm-store/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Vite / Tauri build output
+apps/desktop/src-tauri/target/
+apps/desktop/dist/
+apps/desktop/.vite/
+src-tauri/target/
+/dist_windows/
+/dist_windows_gpu/
+
+# Python / uv
+__pycache__/
+*.py[cod]
+*.pyd
+.venv/
+.venv-gpu/
+.venv-*/
+venv/
+.uv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local application data (never commit a user's library or database)
+data/
+runtime-data/
+cache/
+caches/
+logs/
+*.log
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal
+
+# Model weights and downloaded model artifacts. Keep manifests and docs tracked.
+models/**/*.onnx
+models/**/*.safetensors
+models/**/*.bin
+models/**/*.pth
+models/**/*.pt
+models/**/*.ckpt
+models/**/*.h5
+models/**/*.pb
+models/**/*.tflite
+models/**/*.zip
+models/**/*.7z
+models/**/*.tar
+models/**/*.tar.gz
+!models/**/README.md
+!models/**/.gitkeep
+!models/**/model-lock.example.json
+
+# Local model installer instances and staging areas; keep category-root READMEs tracked.
+/models/.staging-*/
+/models/detector/*/
+/models/recognizer/*/
+/models/similarity/*/
+/models/model-lock.local.json
+/benchmark/.local-model-smoke/
+
+# User/test image data. Store only synthetic, tiny fixtures when explicitly needed.
+benchmark/**/*.png
+benchmark/**/*.jpg
+benchmark/**/*.jpeg
+benchmark/**/*.webp
+benchmark/**/*.gif
+tests/fixtures/**/*.png
+tests/fixtures/**/*.jpg
+tests/fixtures/**/*.jpeg
+tests/fixtures/**/*.webp
+tests/fixtures/**/*.gif
+exports/
+output/
+
+# Secrets, signing material, and local credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+*.key
+*.private
+*.private.key
+*.sig
+TAURI_SIGNING_PRIVATE_KEY
+TAURI_SIGNING_PRIVATE_KEY*
+HF_TOKEN
+HUGGINGFACE_TOKEN
+
+# Local product brief/reference files (may contain private project-specific examples)
+/开发全提示词.md
+/需要下载的模型链接.md
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 个人本地素材：只在本人机器上保留，不进入版本库
+对话记录.md
+resources/comfy-workflows/*.private.json

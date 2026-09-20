@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "name": "txt2img",
+  "description": "文生图（SD1.5 / SDXL 通用）：Checkpoint → 可选 LoRA → 正负提示词 → KSampler → 保存。参数由应用绑定，可直接用于本地 ComfyUI。",
+  "bindings": {
+    "checkpoint": ["4", "inputs", "ckpt_name"],
+    "positive": ["6", "inputs", "text"],
+    "negative": ["7", "inputs", "text"],
+    "steps": ["3", "inputs", "steps"],
+    "cfg": ["3", "inputs", "cfg"],
+    "sampler": ["3", "inputs", "sampler_name"],
+    "scheduler": ["3", "inputs", "scheduler"],
+    "seed": ["3", "inputs", "seed"],
+    "width": ["5", "inputs", "width"],
+    "height": ["5", "inputs", "height"],
+    "batch": ["5", "inputs", "batch_size"],
+    "filename_prefix": ["9", "inputs", "filename_prefix"],
+    "lora_name": ["10", "inputs", "lora_name"],
+    "lora_strength_model": ["10", "inputs", "strength_model"],
+    "lora_strength_clip": ["10", "inputs", "strength_clip"],
+    "lora_mode": ["10", "mode"]
+  },
+  "prompt": {
+    "3": {
+      "class_type": "KSampler",
+      "inputs": {
+        "seed": 1,
+        "steps": 24,
+        "cfg": 7.0,
+        "sampler_name": "euler_ancestral",
+        "scheduler": "normal",
+        "denoise": 1.0,
+        "model": ["10", 0],
+        "positive": ["6", 0],
+        "negative": ["7", 0],
+        "latent_image": ["5", 0]
+      }
+    },
+    "4": {
+      "class_type": "CheckpointLoaderSimple",
+      "inputs": {
+        "ckpt_name": "v1-5-pruned.safetensors"
+      }
+    },
+    "5": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "width": 832,
+        "height": 832,
+        "batch_size": 1
+      }
+    },
+    "6": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "text": "",
+        "clip": ["10", 1]
+      }
+    },
+    "7": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "text": "worst quality, low quality, lowres, bad anatomy, bad hands, extra digits, jpeg artifacts",
+        "clip": ["10", 1]
+      }
+    },
+    "8": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": ["3", 0],
+        "vae": ["4", 2]
+      }
+    },
+    "9": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "anime-pic-manage",
+        "images": ["8", 0]
+      }
+    },
+    "10": {
+      "class_type": "LoraLoader",
+      "inputs": {
+        "model": ["4", 0],
+        "clip": ["4", 1],
+        "lora_name": "",
+        "strength_model": 0.8,
+        "strength_clip": 0.8
+      },
+      "mode": 4
+    }
+  }
+}

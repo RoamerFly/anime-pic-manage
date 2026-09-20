@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "generated_by": "anime-pic-manage-model-manager",
+  "models": [
+    {
+      "id": "animetimm-resnet101-dbv4-full",
+      "repo_id": "animetimm/resnet101.dbv4-full",
+      "resolved_revision": "<commit-or-tag>",
+      "license": "<verify-on-model-page>",
+      "files": [
+        {
+          "file_name": "model.onnx",
+          "file_size": 0,
+          "sha256": "<sha256>",
+          "downloaded_at": "<ISO-8601>"
+        },
+        {
+          "file_name": "selected_tags.csv",
+          "file_size": 0,
+          "sha256": "<sha256>",
+          "downloaded_at": "<ISO-8601>"
+        }
+      ]
+    }
+  ]
+}

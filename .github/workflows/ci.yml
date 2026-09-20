@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  javascript:
+    name: JavaScript and Tauri checks
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Rust
+        if: ${{ hashFiles('apps/desktop/src-tauri/Cargo.toml') != '' }}
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Enable pnpm
+        shell: pwsh
+        run: corepack enable
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          if (-not (Test-Path package.json)) {
+            Write-Output 'Root package.json is not present yet; JavaScript checks are deferred.'
+            exit 0
+          }
+          if (Test-Path pnpm-lock.yaml) {
+            pnpm install --frozen-lockfile
+          } else {
+            pnpm install
+          }
+
+      - name: Lint (when configured)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path package.json)) { exit 0 }
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          if ($pkg.scripts -and $pkg.scripts.lint) { pnpm run lint }
+
+      - name: Test (when configured)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path package.json)) { exit 0 }
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          if ($pkg.scripts -and $pkg.scripts.test) { pnpm run test }
+
+      - name: Build (when configured)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path package.json)) { exit 0 }
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          if ($pkg.scripts -and $pkg.scripts.build) { pnpm run build }
+
+      - name: Rust format check (when configured)
+        if: ${{ hashFiles('apps/desktop/src-tauri/Cargo.toml') != '' }}
+        working-directory: apps/desktop/src-tauri
+        run: cargo fmt --check
+
+      - name: Rust cargo check (when configured)
+        if: ${{ hashFiles('apps/desktop/src-tauri/Cargo.toml') != '' }}
+        working-directory: apps/desktop/src-tauri
+        run: cargo check --locked
+
+      - name: Rust cargo test (when configured)
+        if: ${{ hashFiles('apps/desktop/src-tauri/Cargo.toml') != '' }}
+        working-directory: apps/desktop/src-tauri
+        run: cargo test --locked
+
+  python-worker:
+    name: Python Worker checks
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync Worker dependencies
+        shell: pwsh
+        run: |
+          # The Worker tests import numpy, ONNX Runtime and imgutils, so the
+          # optional model/detector extras are required alongside dev tooling.
+          if (Test-Path apps/ai-worker/uv.lock) {
+            uv sync --directory apps/ai-worker --locked --extra dev --extra model --extra detector
+          } else {
+            uv sync --directory apps/ai-worker --extra dev --extra model --extra detector
+          }
+
+      - name: Run Worker tests (when configured)
+        shell: pwsh
+        run: |
+          if (Test-Path apps/ai-worker/tests) {
+            uv run --directory apps/ai-worker --extra dev --extra model --extra detector pytest
+          }

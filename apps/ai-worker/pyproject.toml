@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "anime-pic-ai-worker"
+version = "0.1.0"
+description = "Local JSON Lines AI worker for anime image analysis"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "Pillow>=10.0,<13",
+]
+
+[project.optional-dependencies]
+model = [
+  "numpy>=1.26,<3",
+  "onnxruntime>=1.20,<1.21",
+]
+detector = [
+  "dghs-imgutils>=0.17,<1",
+]
+dev = [
+  "pytest>=8,<9",
+  "ruff>=0.8,<1",
+  "mypy>=1.13,<2",
+]
+package = [
+  "pyinstaller>=6.11,<7",
+]
+
+[project.scripts]
+anime-pic-ai-worker = "ai_worker.worker:main"
+anime-pic-benchmark = "ai_worker.benchmark:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_worker"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src/ai_worker"]
+ignore_missing_imports = true

@@ -1,0 +1,11 @@
+/* Barrel stylesheet for desktop application */
+@import "./styles/tokens.css";
+@import "./styles/base.css";
+@import "./styles/layout.css";
+@import "./styles/components.css";
+@import "./styles/workspace.css";
+@import "./styles/workbench.css";
+@import "./styles/personal-model.css";
+@import "./styles/similarity.css";
+@import "./styles/settings.css";
+@import "./styles/generation.css";

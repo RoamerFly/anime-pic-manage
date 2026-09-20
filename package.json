@@ -1,0 +1,14 @@
+{
+  "name": "anime-pic-manage",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "dev": "pnpm --filter @anime-pic-manage/desktop dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "desktop": "pnpm --filter @anime-pic-manage/desktop tauri"
+  }
+}

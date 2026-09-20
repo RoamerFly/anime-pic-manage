@@ -1,0 +1,22 @@
+{
+  "id": "anime-head-v2.0-s",
+  "kind": "head_detector",
+  "adapter": "dghs_anime_head_onnx",
+  "format": "onnx",
+  "version": "2.0-s",
+  "model_file": "model.onnx",
+  "labels_file": "labels.json",
+  "preprocess_file": "preprocess.json",
+  "sha256": "",
+  "input": {"width": 640, "height": 640},
+  "supported_devices": ["cpu", "cuda"],
+  "input_name": "images",
+  "input_layout": "nchw",
+  "output_name": "output0",
+  "output_format": "yolo_v8_nms",
+  "output_activation": "none",
+  "align": 32,
+  "allow_dynamic": false,
+  "conf_threshold": 0.413,
+  "iou_threshold": 0.7
+}

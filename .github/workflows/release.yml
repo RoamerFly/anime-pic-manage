@@ -1,0 +1,92 @@
+name: Release (signed Tauri bundle)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, for example 0.1.0'
+        required: true
+        type: string
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Require signing secret without exposing it
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw 'TAURI_SIGNING_PRIVATE_KEY is not configured. Configure it as a repository Actions secret before releasing.'
+          }
+          Write-Output 'Signing secret is present; its value is intentionally not printed.'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm and install dependencies
+        shell: pwsh
+        run: |
+          if (-not (Test-Path package.json)) {
+            Write-Output 'Root package.json is not present yet; no release build is available.'
+            exit 0
+          }
+          corepack enable
+          if (Test-Path pnpm-lock.yaml) {
+            pnpm install --frozen-lockfile
+          } else {
+            pnpm install
+          }
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build signed bundle (when Tauri app is present)
+        if: ${{ hashFiles('apps/desktop/src-tauri/tauri.conf.json') != '' }}
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
+          TAURI_UPDATE_ENDPOINT: ${{ vars.TAURI_UPDATE_ENDPOINT }}
+        run: |
+          if (-not (Test-Path package.json)) {
+            throw 'Root package.json is required for a Tauri release build.'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_UPDATER_PUBLIC_KEY) -or [string]::IsNullOrWhiteSpace($env:TAURI_UPDATE_ENDPOINT)) {
+            throw 'TAURI_UPDATER_PUBLIC_KEY and TAURI_UPDATE_ENDPOINT repository variables must be configured with real values before a signed release.'
+          }
+          $configPath = 'apps/desktop/src-tauri/tauri.conf.json'
+          $config = Get-Content $configPath -Raw | ConvertFrom-Json
+          $configuredKey = [string]$config.plugins.updater.pubkey
+          $configuredEndpoints = @($config.plugins.updater.endpoints)
+          if ([string]::IsNullOrWhiteSpace($configuredKey) -or $configuredKey -match 'REPLACE_WITH|<.*>') {
+            throw 'Tauri updater public key is still a placeholder in tauri.conf.json.'
+          }
+          if ($configuredKey -ne $env:TAURI_UPDATER_PUBLIC_KEY) {
+            throw 'Tauri updater public key does not match TAURI_UPDATER_PUBLIC_KEY.'
+          }
+          if ($configuredEndpoints.Count -ne 1 -or $configuredEndpoints[0] -ne $env:TAURI_UPDATE_ENDPOINT -or $configuredEndpoints[0] -notmatch '^https://') {
+            throw 'Tauri updater endpoint must be one configured HTTPS endpoint matching TAURI_UPDATE_ENDPOINT.'
+          }
+          pnpm --filter @anime-pic-manage/desktop tauri build
+
+      - name: Explain skipped build
+        if: ${{ hashFiles('apps/desktop/src-tauri/tauri.conf.json') == '' }}
+        run: Write-Output 'Tauri configuration is not present yet; no release artifact was produced.'

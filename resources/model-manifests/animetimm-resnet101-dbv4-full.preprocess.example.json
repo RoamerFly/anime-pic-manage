@@ -1,0 +1,24 @@
+{
+  "test": [
+    {
+      "background_color": "white",
+      "interpolation": "bilinear",
+      "size": [512, 512],
+      "type": "pad_to_size"
+    },
+    {
+      "antialias": true,
+      "interpolation": "bilinear",
+      "max_size": null,
+      "size": 384,
+      "type": "resize"
+    },
+    {"size": [384, 384], "type": "center_crop"},
+    {"type": "maybe_to_tensor"},
+    {
+      "mean": [0.4850000143, 0.4560000002, 0.4059999883],
+      "std": [0.2290000021, 0.2240000069, 0.2249999940],
+      "type": "normalize"
+    }
+  ]
+}

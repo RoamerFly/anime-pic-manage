@@ -1,0 +1,265 @@
+/* AI generation page (ComfyUI bridge) */
+
+.generation-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.generation-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.generation-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+}
+
+.generation-presets {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.generation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.generation-prompts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.generation-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.generation-field > span {
+  color: #6b7891;
+  font-size: calc(11.5 * var(--ui-font-step, 1px));
+  font-weight: 600;
+}
+
+.generation-field select,
+.generation-field input[type="text"],
+.generation-field input[type="number"],
+.generation-field textarea {
+  width: 100%;
+  padding: 6px 9px;
+  color: #4b5871;
+  border: 1px solid #dfe3ef;
+  border-radius: 7px;
+  background: #fff;
+  font-family: inherit;
+  font-size: calc(11.5 * var(--ui-font-step, 1px));
+}
+
+.generation-field textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.generation-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.generation-inline > select,
+.generation-inline > input {
+  flex: 1 1 0;
+  min-width: 72px;
+}
+
+.generation-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.generation-progress-text {
+  color: #7b879d;
+  font-size: calc(11 * var(--ui-font-step, 1px));
+}
+
+.generation-results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+}
+
+.generation-results-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.generation-results-heading strong {
+  color: #43506a;
+  font-size: calc(13 * var(--ui-font-step, 1px));
+}
+
+.generation-results-heading small {
+  color: #9aa4b6;
+  font-size: calc(10.5 * var(--ui-font-step, 1px));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.generation-results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.generation-result-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #e8ebf4;
+  border-radius: 8px;
+  background: #fff;
+  text-align: left;
+}
+
+.generation-result-card:hover {
+  border-color: #cbd1ee;
+}
+
+.generation-result-card img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #f3f5fa;
+}
+
+.generation-result-card span {
+  color: #8d97ab;
+  font-size: calc(10 * var(--ui-font-step, 1px));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-text-input-wide {
+  flex: 1 1 320px;
+  width: auto;
+}
+
+/* LoRA training dataset export */
+.generation-dataset {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+}
+
+.generation-caption-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #e8ebf4;
+  border-radius: 8px;
+  background: #fbfcff;
+}
+
+.generation-caption-preview strong {
+  color: #43506a;
+  font-size: calc(12.5 * var(--ui-font-step, 1px));
+}
+
+.generation-caption-preview small {
+  color: #9aa4b6;
+  font-size: calc(10.5 * var(--ui-font-step, 1px));
+  line-height: 1.5;
+}
+
+.training-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: #eceffa;
+  overflow: hidden;
+}
+
+.training-progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #6f8cff, #9d6cff);
+  transition: width 0.4s ease;
+}
+
+.training-command {
+  border: 1px solid #e8ebf4;
+  border-radius: 8px;
+  background: #fbfcff;
+  padding: 8px 12px;
+  font-size: calc(11 * var(--ui-font-step, 1px));
+}
+
+.training-command summary {
+  cursor: pointer;
+  color: #43506a;
+}
+
+.training-command code {
+  display: block;
+  margin-top: 6px;
+  color: #6c7789;
+  overflow-wrap: anywhere;
+}
+
+.training-log {
+  max-height: 220px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid #23262f;
+  border-radius: 8px;
+  background: #1b1d24;
+  color: #d6d9e3;
+  font-size: calc(10.5 * var(--ui-font-step, 1px));
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.generation-caption-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: calc(11 * var(--ui-font-step, 1px));
+}
+
+.generation-caption-row code {
+  flex: 0 0 90px;
+  color: #7c879b;
+}
+
+.generation-caption-row span {
+  min-width: 0;
+  color: #4b5871;
+  line-height: 1.5;
+  word-break: break-word;
+}

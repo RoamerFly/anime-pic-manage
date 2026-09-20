@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Default capabilities for the local anime image manager","local":true,"windows":["main"],"permissions":["core:default","dialog:default","opener:default","updater:default"]}}

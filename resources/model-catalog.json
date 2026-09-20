@@ -1,0 +1,43 @@
+[
+  {
+    "id": "camie-initial",
+    "name": "Camie tagger（热门与冷门角色覆盖更广）",
+    "kind": "character_recognizer",
+    "repo_id": "deepghs/camie_tagger_onnx",
+    "size_mb": 824,
+    "license": "上游 Camais03/camie-tagger（使用前请核对模型页许可）",
+    "note": "7 万级标签，包含大量冷门角色；CPU 约 0.5 秒/张。实测对 AI 生成图召回偏低，建议配合人工矫正使用。",
+    "files": [
+      { "path": "initial/model.onnx", "name": "model.onnx" },
+      { "path": "initial/selected_tags.csv", "name": "selected_tags.csv" },
+      { "path": "initial/preprocess.json", "name": "preprocess.json" },
+      { "path": "initial/threshold.json", "name": "threshold.json" },
+      { "path": "initial/meta.json", "name": "meta.json" }
+    ],
+    "metadata": {
+      "id": "camie-initial",
+      "kind": "character_recognizer",
+      "adapter": "camie_onnx",
+      "format": "onnx",
+      "version": "initial",
+      "model_file": "model.onnx",
+      "labels_file": "selected_tags.csv",
+      "preprocess_file": "preprocess.json",
+      "input": { "width": 512, "height": 512 },
+      "supported_devices": ["cpu", "cuda"],
+      "input_name": "input",
+      "input_layout": "nchw",
+      "output_name": "logits",
+      "output_activation": "sigmoid",
+      "categories_file": "categories.json",
+      "thresholds_file": "thresholds.csv",
+      "character_category": 4,
+      "tag_count": 70527,
+      "source": "https://huggingface.co/deepghs/camie_tagger_onnx"
+    },
+    "generate": {
+      "categories.json": [{ "name": "character", "category": 4 }],
+      "thresholds.csv": "name,category,threshold\ncharacter,4,0.25757578015327454\n"
+    }
+  }
+]

@@ -1,0 +1,6 @@
+packages:
+  - apps/*
+  - packages/*
+# pnpm 11 dropped onlyBuiltDependencies in favour of an explicit allowBuilds map.
+allowBuilds:
+  esbuild: true

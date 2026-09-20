@@ -1,0 +1,248 @@
+/* Base typography, utilities, buttons, badges, and alerts */
+
+h1, h2, h3, p {
+  margin: 0;
+}
+
+h1 {
+  color: #172035;
+  font-size: calc(18 * var(--ui-font-step, 1px));
+  letter-spacing: -.02em;
+  line-height: 1.2;
+  font-weight: 700;
+  margin: 0;
+}
+
+h2 {
+  font-size: calc(32 * var(--ui-font-step, 1px));
+  line-height: 1.22;
+  letter-spacing: -.04em;
+  font-weight: 800;
+}
+
+h3 {
+  font-size: calc(16 * var(--ui-font-step, 1px));
+  letter-spacing: -.02em;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+.alert {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  margin: -12px 0 20px;
+  font-size: calc(12 * var(--ui-font-step, 1px));
+}
+
+.alert.error {
+  color: #a55353;
+  border: 1px solid #f1d0d0;
+  background: #fff7f7;
+}
+
+.alert button {
+  margin-left: auto;
+  color: inherit;
+  border: 0;
+  background: transparent;
+  text-decoration: underline;
+  font-size: calc(12 * var(--ui-font-step, 1px));
+}
+
+.tag {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #6e74cc;
+  background: #edf0ff;
+  border-radius: 5px;
+  padding: 5px 9px;
+  font-size: calc(10 * var(--ui-font-step, 1px));
+  font-weight: 700;
+  letter-spacing: .05em;
+}
+
+.tag.warning {
+  color: #a77841;
+  background: #fff4e4;
+}
+
+.tag.violet {
+  color: #8c68b4;
+  background: #f4eaff;
+}
+
+.primary-button,
+.ghost-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 15px;
+  border-radius: 8px;
+  font-size: calc(12 * var(--ui-font-step, 1px));
+  font-weight: 700;
+  transition: all .17s ease;
+}
+
+.primary-button {
+  color: white;
+  border: 1px solid #6675e4;
+  background: #6877df;
+  box-shadow: 0 7px 14px #6472dc2b;
+}
+
+.primary-button:hover {
+  background: #5565d3;
+  transform: translateY(-1px);
+}
+
+.primary-button:disabled,
+.ghost-button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.ghost-button {
+  color: #606e86;
+  border: 1px solid #dde3ef;
+  background: #fff;
+}
+
+.ghost-button:hover {
+  color: #5364d8;
+  border-color: #bcc5f1;
+  background: #fbfcff;
+}
+
+.danger-button {
+  color: #af6670 !important;
+  border-color: #f0d6db !important;
+  background: #fff8f9 !important;
+}
+
+.danger-button:hover {
+  background: #fff0f2 !important;
+}
+
+.icon-button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e1e6ef;
+  border-radius: 9px;
+  color: #6b778e;
+  background: #fff;
+}
+
+.icon-button:hover {
+  color: #5364d8;
+  border-color: #bac3f5;
+}
+
+.selected-path {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #4d9570;
+  font-size: calc(11 * var(--ui-font-step, 1px));
+  margin-top: 13px;
+  max-width: 510px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.muted {
+  color: #9ca6b9;
+  font-size: calc(11 * var(--ui-font-step, 1px));
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.image-load-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 9px;
+  padding: 8px 10px;
+  color: #a04f5d;
+  border: 1px solid #f0d6db;
+  border-radius: 7px;
+  background: #fff7f8;
+  font-size: calc(10 * var(--ui-font-step, 1px));
+}
+
+.image-load-error svg {
+  flex: 0 0 auto;
+}
+
+.soft-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  color: #937142;
+  background: #fff6e9;
+  border-radius: 6px;
+  font-size: calc(10 * var(--ui-font-step, 1px));
+  font-weight: 700;
+}
+
+.soft-badge.green {
+  color: #4e9b74;
+  background: #eaf8ef;
+}
+
+.soft-badge.blue {
+  color: #6481c9;
+  background: #edf2ff;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 5px 7px;
+  border-radius: 5px;
+  color: #4e9b74;
+  background: #eaf8ef;
+  font-size: calc(9 * var(--ui-font-step, 1px));
+  font-weight: 700;
+}
+
+.status-badge > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-badge.review {
+  color: #b27c46;
+  background: #fff3e3;
+}
+
+.status-badge.unknown {
+  color: #8590a3;
+  background: #f0f2f6;
+}

@@ -1,0 +1,38 @@
+name: Update configuration check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  configuration:
+    name: Check updater configuration
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check updater configuration when Tauri app is present
+        shell: pwsh
+        env:
+          TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
+          TAURI_UPDATE_ENDPOINT: ${{ vars.TAURI_UPDATE_ENDPOINT }}
+        run: |
+          if (-not (Test-Path apps/desktop/src-tauri/tauri.conf.json)) {
+            Write-Output 'Tauri configuration is not present yet; updater check is informational.'
+            exit 0
+          }
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_UPDATER_PUBLIC_KEY)) {
+            throw 'TAURI_UPDATER_PUBLIC_KEY repository variable is missing.'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_UPDATE_ENDPOINT)) {
+            throw 'TAURI_UPDATE_ENDPOINT repository variable is missing.'
+          }
+          if (-not ($env:TAURI_UPDATE_ENDPOINT -match '^https://')) {
+            throw 'TAURI_UPDATE_ENDPOINT must use HTTPS.'
+          }
+          Write-Output 'Updater variables are present and the endpoint uses HTTPS. No update is published by this workflow.'
