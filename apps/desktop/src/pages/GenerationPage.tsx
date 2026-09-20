@@ -4,7 +4,6 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   AlertCircle,
-  CircleCheck,
   FolderOpen,
   ImagePlus,
   Loader2,
@@ -395,6 +394,11 @@ export function GenerationPage() {
             {status?.device ? ` · ${status.device}` : ""}
             {status?.vram_gb ? ` · ${status.vram_gb} GB` : ""}
           </span>
+          {notice && (
+            // Routine start/stop/cancel feedback stays on one line instead of
+            // taking a whole banner row of vertical space.
+            <span className="generation-progress-text">{notice}</span>
+          )}
           <button
             className="ghost-button"
             onClick={() =>
@@ -454,12 +458,6 @@ export function GenerationPage() {
         <div className="banner-callout banner-error">
           <AlertCircle size={16} />
           <span>{error}</span>
-        </div>
-      )}
-      {notice && !error && (
-        <div className="banner-callout banner-info">
-          <CircleCheck size={16} />
-          <span>{notice}</span>
         </div>
       )}
 
