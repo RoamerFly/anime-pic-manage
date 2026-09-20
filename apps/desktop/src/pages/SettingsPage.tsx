@@ -1512,7 +1512,7 @@ function ReferenceLibrarySection({
               })
             }
           >
-            <option value="ccip">CCIP（推荐，需下载模型约 370MB）</option>
+            <option value="ccip">CCIP（推荐，需下载模型约 143MB）</option>
             <option value="embedding">当前识别模型的 embedding（无需下载）</option>
           </select>
           <button
@@ -1830,7 +1830,7 @@ function ModelSettingsPanel({
             <ModelCard
               key={entry.id}
               entry={entry}
-              busy={busy !== null}
+              busy={busy}
               onInstall={() => void install(entry)}
               onRemove={() => void remove(entry)}
               onActivate={() => void activate(entry)}
@@ -1850,7 +1850,7 @@ function ModelSettingsPanel({
             <ModelCard
               key={entry.id}
               entry={entry}
-              busy={busy !== null}
+              busy={busy}
               onInstall={() => void install(entry)}
               onRemove={() => void remove(entry)}
               onActivate={() => void activate(entry)}
@@ -1895,7 +1895,8 @@ export function ModelCard({
   onOpenPath,
 }: {
   entry: ModelInventoryEntry;
-  busy: boolean;
+  /** Id of the entry whose download/delete is running, if any. */
+  busy: string | null;
   onInstall: () => void;
   onRemove: () => void;
   onActivate: () => void;
@@ -1906,6 +1907,10 @@ export function ModelCard({
     tone: "missing",
   };
   const installed = entry.status === "installed";
+  // Only the row being worked on spins; every other row just locks its buttons
+  // so two downloads cannot race against each other.
+  const rowBusy = busy === entry.id;
+  const locked = busy !== null;
 
   return (
     <div className={`model-card${entry.active ? " active" : ""}`}>
@@ -1936,7 +1941,7 @@ export function ModelCard({
             type="button"
             className="ghost-button"
             onClick={onActivate}
-            disabled={busy}
+            disabled={locked}
           >
             <CircleCheck size={15} /> 设为当前
           </button>
@@ -1946,9 +1951,9 @@ export function ModelCard({
             type="button"
             className="primary-button"
             onClick={onInstall}
-            disabled={busy}
+            disabled={locked}
           >
-            {busy ? <LoaderCircle size={15} className="spin" /> : <Download size={15} />}
+            {rowBusy ? <LoaderCircle size={15} className="spin" /> : <Download size={15} />}
             下载{entry.size_mb > 0 ? ` ${formatBytes(entry.size_mb * 1024 ** 2)}` : ""}
           </button>
         )}
@@ -1957,7 +1962,7 @@ export function ModelCard({
             type="button"
             className="ghost-button"
             onClick={onOpenPath}
-            disabled={busy}
+            disabled={locked}
           >
             打开目录
           </button>
@@ -1967,7 +1972,7 @@ export function ModelCard({
             type="button"
             className="ghost-button danger"
             onClick={onRemove}
-            disabled={busy || entry.active}
+            disabled={locked || entry.active}
             title={entry.active ? "正在使用中，请先切换到其他识别模型" : undefined}
           >
             <Trash2 size={15} /> 删除

@@ -27,7 +27,7 @@ function render(model: ModelInventoryEntry) {
   return renderToStaticMarkup(
     <ModelCard
       entry={model}
-      busy={false}
+      busy={null}
       onInstall={() => {}}
       onRemove={() => {}}
       onActivate={() => {}}
