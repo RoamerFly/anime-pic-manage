@@ -114,3 +114,4 @@ desktop.ini
 # 个人本地素材：只在本人机器上保留，不进入版本库
 对话记录.md
 resources/comfy-workflows/*.private.json
+commit-msg.txt
