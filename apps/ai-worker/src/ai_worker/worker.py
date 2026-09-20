@@ -27,6 +27,9 @@ from .handlers import (
     handle_enumerate,
     handle_export,
     handle_fusion,
+    handle_model_cache_delete,
+    handle_model_cache_prefetch,
+    handle_model_cache_status,
     handle_model_delete,
     handle_model_install,
     handle_personal_model_evaluate,
@@ -209,6 +212,12 @@ class WorkerService:
             return handle_model_install(self, request.payload)
         if message_type in {"model.delete", "model_delete"}:
             return handle_model_delete(self, request.payload)
+        if message_type in {"model.cache.status", "model_cache_status"}:
+            return handle_model_cache_status(self, request.payload)
+        if message_type in {"model.cache.prefetch", "model_cache_prefetch"}:
+            return handle_model_cache_prefetch(self, request.payload)
+        if message_type in {"model.cache.delete", "model_cache_delete"}:
+            return handle_model_cache_delete(self, request.payload)
         if message_type in {
             "library.images.list",
             "images.enumerate",

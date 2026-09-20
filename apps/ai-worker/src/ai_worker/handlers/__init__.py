@@ -1,7 +1,13 @@
 """Worker IPC request handlers."""
 
 from .dataset import handle_dataset_export
-from .models import handle_model_delete, handle_model_install
+from .models import (
+    handle_model_cache_delete,
+    handle_model_cache_prefetch,
+    handle_model_cache_status,
+    handle_model_delete,
+    handle_model_install,
+)
 from .personal_model import (
     handle_personal_model_evaluate,
     handle_personal_model_train,
@@ -32,6 +38,9 @@ __all__ = [
     "handle_enumerate",
     "handle_export",
     "handle_fusion",
+    "handle_model_cache_delete",
+    "handle_model_cache_prefetch",
+    "handle_model_cache_status",
     "handle_model_delete",
     "handle_model_install",
     "handle_personal_model_evaluate",

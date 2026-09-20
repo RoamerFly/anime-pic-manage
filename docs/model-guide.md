@@ -55,13 +55,14 @@ models/
 
 仓库根目录提供两个 GPU 构建入口：`build_gpu.bat`（全量，输出 `dist_windows_gpu`）与 `build_gpu_fast.bat`（复用上一次 GPU 构建的运行时与 Python 环境，只重建程序与 Worker 逻辑）。GPU 构建使用独立环境 `apps/ai-worker/.venv-gpu`，不会污染开发用的 `.venv`。构建完成后，设置页“环境配置”的“CUDA 实测”会用已安装模型真实加载一次会话，直接给出识别实际使用的执行提供器，而不是只看运行时声明。
 
-设置页按用途分为三个页签：
+设置页按用途分为五个页签：
 
 | 页签 | 主要内容 |
 | --- | --- |
 | 基础配置 | 界面字号（0.5px 步进）、运行方式、推理设备与一次性环境状态检查 |
-| 识别配置 | ONNX 推理线程数（CPU 并行度）、识别扫描默认是否跳过已标注图片 |
+| 识别配置 | ONNX 推理线程数（CPU 并行度）、识别扫描默认是否跳过已标注图片、参考图识别开关与建库 |
 | 相似度配置 | 特征提取并行度、默认匹配灵敏度、默认包含子目录、默认归档文件夹名 |
+| 模型配置 | 全部内置 / 可下载 / 已缓存模型的清单与下载、删除、切换入口 |
 
 界面字号以 14px 为基准整体缩放全部界面文字（滑块无级调整，± 按钮按 0.5px 步进），保存后下次启动继续生效。识别由单个 Worker 顺序执行，线程数只影响单次模型推理内部的并行度；相似度扫描是 CPU 感知哈希流水线，并行度直接决定特征提取速度。两项设置保存后立即对新任务生效。
 
@@ -98,9 +99,10 @@ Get-FileHash .\models\recognizer\animetimm-resnet101-dbv4-full\model.onnx -Algor
 
 ## 打标模型（LoRA 训练集导出）
 
-「AI 生图 → 训练集导出」用 WD14 打标器把裁剪后的角色图转成 Danbooru 标签 caption。当前固定使用 `SwinV2_v3`（`dghs-imgutils` 的默认档位，对应上游 `SmilingWolf/wd-swinv2-tagger-v3` 权重），通过 `huggingface_hub` 按需下载，模型与标签文件进入本机 Hugging Face 缓存（受 `HF_HOME` 控制），不写入仓库、不随安装包分发。
+「AI 生图 → 训练集导出」用 WD14 打标器把裁剪后的角色图转成 Danbooru 标签 caption。当前固定使用 `SwinV2_v3`（`dghs-imgutils` 的默认档位）：权重取自 `deepghs/wd14_tagger_with_embeddings` 里的 `SmilingWolf/wd-swinv2-tagger-v3/model.onnx`，标签表取自 `SmilingWolf/wd-swinv2-tagger-v3/selected_tags.csv`。两个文件通过 `huggingface_hub` 下载到本机 Hugging Face 缓存（受 `HF_HOME` 控制），不写入仓库、不随安装包分发。
 
-- 权重约 470MB，首次导出才会下载；离线或无法访问 huggingface.co 时导出会失败，其余识别功能不受影响。
+- 权重约 446MB，未提前下载时会在首次导出时才拉取；离线或无法访问 huggingface.co 时导出会失败，其余识别功能不受影响。
+- 同一个模型和 CCIP 参考匹配模型都可以在 **设置 → 模型配置** 里提前下载、查看状态和删除；面板会显示实际的缓存目录，删除后下次使用会重新下载。
 - 通用标签阈值默认 `0.35`、角色标签阈值默认 `0.85`；`rating_*` 标签不写入 caption。
 - 打标结果只是初稿，导出后建议抽查 caption 再交给 kohya 训练；训练器与权重许可证按各自上游执行。
 

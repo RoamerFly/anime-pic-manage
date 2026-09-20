@@ -111,6 +111,11 @@ pub(crate) fn default_dataset_dir(app: &AppHandle, settings: &AppSettings) -> St
 /// Folder the app exports training sets into, next to ComfyUI.
 pub(crate) const MANAGED_DATASET_DIR: &str = "lora-datasets-manage";
 /// Folder the app writes trained LoRA files into, next to ComfyUI.
+///
+/// Only the naming contract asserted by the tests lives here: the directory is
+/// derived from the dataset folder by [`lora_dir_for`], and the fallback used
+/// when ComfyUI is unconfigured is the portable layout's `output\loras`.
+#[allow(dead_code)]
 pub(crate) const MANAGED_LORA_DIR: &str = "lora-models-manage";
 
 /// Sibling directory for trained LoRA files.

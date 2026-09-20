@@ -3,6 +3,7 @@
     "id": "camie-initial",
     "name": "Camie tagger（热门与冷门角色覆盖更广）",
     "kind": "character_recognizer",
+    "delivery": "models_dir",
     "repo_id": "deepghs/camie_tagger_onnx",
     "size_mb": 824,
     "license": "上游 Camais03/camie-tagger（使用前请核对模型页许可）",
@@ -39,5 +40,51 @@
       "categories.json": [{ "name": "character", "category": 4 }],
       "thresholds.csv": "name,category,threshold\ncharacter,4,0.25757578015327454\n"
     }
+  },
+  {
+    "id": "wd14-swinv2-v3",
+    "name": "WD14 打标模型（SwinV2 v3）",
+    "kind": "tagger",
+    "delivery": "hf_cache",
+    "repo_id": "deepghs/wd14_tagger_with_embeddings",
+    "size_mb": 446,
+    "license": "SmilingWolf WD tagger 系列（使用前请核对模型页许可）",
+    "note": "训练集导出时给裁剪图生成 Danbooru 标签。首次导出会自动下载，可在这里提前下载或清理缓存。",
+    "files": [
+      {
+        "repo_id": "deepghs/wd14_tagger_with_embeddings",
+        "path": "SmilingWolf/wd-swinv2-tagger-v3/model.onnx",
+        "name": "model.onnx"
+      },
+      {
+        "repo_id": "SmilingWolf/wd-swinv2-tagger-v3",
+        "path": "selected_tags.csv",
+        "name": "selected_tags.csv"
+      }
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "ccip-onnx",
+    "name": "CCIP 参考匹配模型",
+    "kind": "reference_backend",
+    "delivery": "hf_cache",
+    "repo_id": "deepghs/ccip_onnx",
+    "size_mb": 143,
+    "license": "CCIP 上游仓库（使用前请核对模型页许可）",
+    "note": "参考图识别选 ccip 后端时，用它把参考图与待识别图编码成特征向量；纯 embedding 后端不需要它。",
+    "files": [
+      {
+        "repo_id": "deepghs/ccip_onnx",
+        "path": "ccip-caformer-24-randaug-pruned/model_feat.onnx",
+        "name": "model_feat.onnx"
+      },
+      {
+        "repo_id": "deepghs/ccip_onnx",
+        "path": "ccip-caformer-24-randaug-pruned/model_metrics.onnx",
+        "name": "model_metrics.onnx"
+      }
+    ],
+    "metadata": {}
   }
 ]

@@ -7,14 +7,17 @@ import {
   CircleCheck,
   CircleHelp,
   Cpu,
+  Download,
   FolderCog,
   Github,
   ImagePlus,
   Info,
   LoaderCircle,
+  Package,
   RefreshCw,
   SlidersHorizontal,
   Sparkles,
+  Trash2,
   WandSparkles,
   X,
 } from "lucide-react";
@@ -27,7 +30,8 @@ import type {
   GpuInventory,
   KohyaEnvironment,
   KohyaStatus,
-  RecognizerInventory,
+  ModelInventory,
+  ModelInventoryEntry,
   ReferenceLibraryStatus,
   RuntimeStatus,
   SettingsTab,
@@ -110,6 +114,12 @@ const SETTINGS_TABS: Array<{
     label: "相似度配置",
     hint: "并行度、默认阈值与归档行为",
     icon: SlidersHorizontal,
+  },
+  {
+    id: "models",
+    label: "模型配置",
+    hint: "自带与可下载模型的清单、状态与存储位置",
+    icon: Package,
   },
   {
     id: "comfy",
@@ -1558,30 +1568,80 @@ function ReferenceLibrarySection({
   );
 }
 
+/** Model kinds, in the order 模型配置 lists them. */
+const MODEL_GROUPS: Array<{ id: string; label: string; hint: string }> = [
+  {
+    id: "character_recognizer",
+    label: "角色识别模型",
+    hint: "扫描时给每张图打角色标签；同一时间只有一个处于“使用中”。",
+  },
+  {
+    id: "head_detector",
+    label: "头部检测模型",
+    hint: "先框出人物头部再裁剪，随安装包一起分发。",
+  },
+  {
+    id: "tagger",
+    label: "训练集打标模型",
+    hint: "导出 LoRA 训练集时把裁剪图转成 Danbooru 标签，首次导出会自动下载。",
+  },
+  {
+    id: "reference_backend",
+    label: "参考图匹配模型",
+    hint: "“参考图识别”选 CCIP 后端时使用，纯 embedding 后端不需要。",
+  },
+];
+
+const MODEL_STATUS_META: Record<string, { label: string; tone: string }> = {
+  installed: { label: "已就绪", tone: "ready" },
+  partial: { label: "不完整", tone: "warn" },
+  missing: { label: "未下载", tone: "missing" },
+  unavailable: { label: "不可用", tone: "missing" },
+};
+
+function formatBytes(value: number): string {
+  if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(2)} GB`;
+  // Keep one decimal for small models, where the difference between 2 MB and
+  // 45 MB still tells the user whether a download is trivial.
+  if (value >= 100 * 1024 ** 2) return `${Math.round(value / 1024 ** 2)} MB`;
+  if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(1)} MB`;
+  if (value >= 1024) return `${(value / 1024).toFixed(0)} KB`;
+  return `${value} B`;
+}
+
+function modelSizeLabel(entry: ModelInventoryEntry): string {
+  if (entry.installed_bytes > 0) return formatBytes(entry.installed_bytes);
+  if (entry.size_mb > 0) return `约 ${formatBytes(entry.size_mb * 1024 ** 2)}`;
+  return "体积未知";
+}
+
 /**
- * Character recognizer inventory: pick the active model and install extra
- * ones from the shipped catalog (the Worker performs the download).
+ * 模型配置: every model the app ships, can download, or has cached, in one
+ * list. The Worker owns the downloads; this panel only reflects its inventory.
  */
-function RecognizerModelSection({
+function ModelSettingsPanel({
   settings,
   onChange,
 }: {
   settings: AppSettings;
   onChange: (patch: Partial<AppSettings>) => void;
 }) {
-  const [inventory, setInventory] = useState<RecognizerInventory | null>(null);
+  const [inventory, setInventory] = useState<ModelInventory | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!isTauriRuntime()) return;
-    const response = await invokeCore<RecognizerInventory>(
-      "get_recognizer_inventory",
+    const response = await invokeCore<ModelInventory>(
+      "get_model_inventory",
       "model.inventory",
     );
     if (response.payload) {
       setInventory(response.payload);
+      setError(response.payload.warning ?? null);
+      // Adopt the persisted choice on first load so the markers match what the
+      // next scan will really use.
       if (!settings.recognition_recognizer_model && response.payload.active) {
         onChange({ recognition_recognizer_model: response.payload.active });
       }
@@ -1596,20 +1656,21 @@ function RecognizerModelSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const install = async (catalogId: string) => {
-    setBusy(catalogId);
+  /** Download a catalog model into the models directory or the HF cache. */
+  const install = async (entry: ModelInventoryEntry) => {
+    setBusy(entry.id);
     setMessage(null);
     setError(null);
     try {
       const response = await invokeCore<unknown>(
-        "install_recognizer_model",
+        "install_catalog_model",
         "model.install",
-        { catalogId },
+        { catalogId: entry.id },
       );
       if (response.error) {
         setError(response.error.message);
       } else {
-        setMessage("模型已下载并安装，可以在上面切换使用。");
+        setMessage(`${entry.name} 已下载完成，可直接离线使用。`);
       }
       await refresh();
     } finally {
@@ -1617,128 +1678,192 @@ function RecognizerModelSection({
     }
   };
 
-  const remove = async (modelId: string) => {
-    setBusy(modelId);
+  const remove = async (entry: ModelInventoryEntry) => {
+    const target = entry.delivery === "hf_cache" ? "缓存中的模型文件" : "模型目录";
+    if (
+      !globalThis.confirm(
+        `确定删除「${entry.name}」吗？\n将从${target}移除，之后需要重新下载才能使用。`,
+      )
+    ) {
+      return;
+    }
+    setBusy(entry.id);
     setMessage(null);
     setError(null);
     try {
-      const response = await invokeCore<unknown>("delete_recognizer_model", "model.delete", {
-        modelId,
-      });
+      const response = await invokeCore<unknown>(
+        "delete_catalog_model",
+        "model.delete",
+        { catalogId: entry.id },
+      );
       if (response.error) setError(response.error.message);
-      else setMessage(`已删除模型 ${modelId}。`);
+      else setMessage(`已删除「${entry.name}」。`);
       await refresh();
     } finally {
       setBusy(null);
     }
   };
 
-  const installed = inventory?.models ?? [];
-  const missing = (inventory?.catalog ?? []).filter(
-    (entry) => !installed.some((model) => model.id === entry.id),
+  /** Persist the recognizer every later scan should use. */
+  const activate = async (entry: ModelInventoryEntry) => {
+    setBusy(entry.id);
+    setMessage(null);
+    setError(null);
+    try {
+      const response = await invokeCore<{ active: string }>(
+        "set_active_recognizer",
+        "model.activate",
+        { modelId: entry.id },
+      );
+      if (response.error) {
+        setError(response.error.message);
+      } else {
+        onChange({ recognition_recognizer_model: entry.id });
+        setMessage(`已把「${entry.name}」设为当前识别模型，下一次扫描生效。`);
+      }
+      await refresh();
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const openPath = (path: string | null | undefined) => {
+    if (!path) return;
+    void invokeCore<void>("show_item_in_folder", "system.explorer.show", { path });
+  };
+
+  const entries = inventory?.entries ?? [];
+  const ready = entries.filter((entry) => entry.status === "installed");
+  const usedBytes = ready.reduce((total, entry) => total + entry.installed_bytes, 0);
+  const groups = MODEL_GROUPS.map((group) => ({
+    ...group,
+    entries: entries.filter((entry) => entry.kind === group.id),
+  })).filter((group) => group.entries.length > 0);
+  const otherEntries = entries.filter(
+    (entry) => !MODEL_GROUPS.some((group) => group.id === entry.kind),
   );
 
   return (
-    <>
-      <div className="settings-field settings-field-stacked">
-        <div>
-          <strong>角色识别模型</strong>
-          <small>
-            切换后下一次扫描生效。不同模型的角色标签覆盖不同：默认模型负责热门角色，
-            Camie 模型覆盖更广（含冷门角色），但对 AI 生成图可能漏判。
-          </small>
+    <section className="settings-section">
+      <div className="settings-heading">
+        <div className="settings-heading-icon">
+          <Package size={19} />
         </div>
-        <div className="generation-inline">
-          <select
-            value={settings.recognition_recognizer_model}
-            onChange={(event) =>
-              onChange({ recognition_recognizer_model: event.target.value })
-            }
-            disabled={installed.length === 0}
-          >
-            <option value="">默认（自动选择已安装模型）</option>
-            {installed.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.id}
-                {model.status === "installed" ? "" : "（不可用）"}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="ghost-button"
-            onClick={() => void refresh()}
-            disabled={busy !== null}
-          >
-            <RefreshCw size={15} /> 刷新列表
-          </button>
+        <div>
+          <h3>模型配置</h3>
+          <p>
+            这里汇总随安装包自带、可从 Hugging Face 下载以及已经缓存到本机的全部模型。
+          </p>
         </div>
       </div>
 
-      {installed.length > 0 && (
-        <div className="settings-field settings-field-stacked">
-          <div>
-            <strong>已安装</strong>
-            <small>
-              模型文件放在 models\recognizer\&lt;id&gt;\；删除后需要重新下载才能再用。
-            </small>
+      <div className="settings-field settings-field-stacked">
+        <div>
+          <strong>存储位置</strong>
+          <small>
+            角色识别模型与检测模型下载到模型目录；打标、参考匹配模型走 Hugging Face
+            缓存。“删除”只清理这两个目录里的模型文件。
+          </small>
+        </div>
+        <div className="model-path-list">
+          <div className="model-path-row">
+            <span className="model-path-label">模型目录</span>
+            <code title={inventory?.models_dir}>
+              {inventory?.models_dir || "等待 AI Worker 就绪…"}
+            </code>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => openPath(inventory?.models_dir)}
+              disabled={!inventory?.models_dir}
+            >
+              打开
+            </button>
           </div>
-          <div className="runtime-feature-list">
-            {installed.map((model) => (
-              <span
-                key={model.id}
-                className={
-                  model.status === "installed"
-                    ? "runtime-feature ready"
-                    : "runtime-feature unavailable"
-                }
-              >
-                <i />
-                {model.id} · {model.adapter} · v{model.version}
-                {model.active ? " · 使用中" : ""}
-                {model.error ? ` · ${model.error}` : ""}
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => void remove(model.id)}
-                  disabled={busy !== null || model.active}
-                >
-                  删除
-                </button>
-              </span>
-            ))}
+          <div className="model-path-row">
+            <span className="model-path-label">缓存目录</span>
+            <code title={inventory?.cache_dir}>
+              {inventory?.cache_dir || "等待 AI Worker 就绪…"}
+            </code>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => openPath(inventory?.cache_dir)}
+              disabled={!inventory?.cache_dir}
+            >
+              打开
+            </button>
           </div>
         </div>
-      )}
+      </div>
 
-      {missing.length > 0 && (
-        <div className="settings-field settings-field-stacked">
-          <div>
-            <strong>可下载模型</strong>
-            <small>从 Hugging Face 下载到本机 models 目录，下载后可离线使用。</small>
+      <div className="model-toolbar">
+        <span>
+          {inventory
+            ? `${ready.length} / ${entries.length} 个模型已就绪${
+                usedBytes > 0 ? ` · 占用 ${formatBytes(usedBytes)}` : ""
+              }`
+            : "正在读取模型清单…"}
+        </span>
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={() => void refresh()}
+          disabled={busy !== null}
+        >
+          {busy !== null ? (
+            <LoaderCircle size={15} className="spin" />
+          ) : (
+            <RefreshCw size={15} />
+          )}
+          刷新
+        </button>
+      </div>
+
+      {groups.map((group) => (
+        <div className="model-group" key={group.id}>
+          <div className="model-group-heading">
+            <strong>{group.label}</strong>
+            <small>{group.hint}</small>
           </div>
-          {missing.map((entry) => (
-            <div key={entry.id} className="generation-inline">
-              <button
-                type="button"
-                className="ghost-button"
-                onClick={() => void install(entry.id)}
-                disabled={busy !== null}
-              >
-                {busy === entry.id ? (
-                  <LoaderCircle size={15} className="spin" />
-                ) : (
-                  <Sparkles size={15} />
-                )}
-                下载 {entry.name}（{entry.size_mb} MB）
-              </button>
-              <small>
-                仓库 {entry.repo_id} · {entry.note}
-              </small>
-            </div>
+          {group.entries.map((entry) => (
+            <ModelCard
+              key={entry.id}
+              entry={entry}
+              busy={busy !== null}
+              onInstall={() => void install(entry)}
+              onRemove={() => void remove(entry)}
+              onActivate={() => void activate(entry)}
+              onOpenPath={() => openPath(entry.path)}
+            />
+          ))}
+        </div>
+      ))}
+
+      {otherEntries.length > 0 && (
+        <div className="model-group">
+          <div className="model-group-heading">
+            <strong>其他模型</strong>
+            <small>清单里未归类的模型。</small>
+          </div>
+          {otherEntries.map((entry) => (
+            <ModelCard
+              key={entry.id}
+              entry={entry}
+              busy={busy !== null}
+              onInstall={() => void install(entry)}
+              onRemove={() => void remove(entry)}
+              onActivate={() => void activate(entry)}
+              onOpenPath={() => openPath(entry.path)}
+            />
           ))}
         </div>
       )}
+
+      <div className="settings-field-note">
+        “自动融合模型”会把当前激活的个人模型与最新的人工矫正样本合并使用；个人模型
+        由“再训练”生成，与这里的基础识别模型互相配合，不需要在这里切换。
+      </div>
 
       {(message || error) && (
         <div className="settings-status-banner" aria-live="polite">
@@ -1756,7 +1881,100 @@ function RecognizerModelSection({
           )}
         </div>
       )}
-    </>
+    </section>
+  );
+}
+
+/** One row of the model list: identity, status badge and its actions. */
+export function ModelCard({
+  entry,
+  busy,
+  onInstall,
+  onRemove,
+  onActivate,
+  onOpenPath,
+}: {
+  entry: ModelInventoryEntry;
+  busy: boolean;
+  onInstall: () => void;
+  onRemove: () => void;
+  onActivate: () => void;
+  onOpenPath: () => void;
+}) {
+  const status = MODEL_STATUS_META[entry.status] ?? {
+    label: entry.status,
+    tone: "missing",
+  };
+  const installed = entry.status === "installed";
+
+  return (
+    <div className={`model-card${entry.active ? " active" : ""}`}>
+      <div className="model-card-body">
+        <div className="model-card-title">
+          <strong>{entry.name}</strong>
+          <span className={`model-badge ${status.tone}`}>{status.label}</span>
+          {entry.active && <span className="model-badge active">使用中</span>}
+          {entry.bundled && <span className="model-badge">随包提供</span>}
+        </div>
+        <small className="model-card-meta">
+          <code>{entry.id}</code>
+          {entry.repo_id ? ` · ${entry.repo_id}` : " · 随安装包分发"}
+          {` · ${modelSizeLabel(entry)}`}
+          {entry.version ? ` · v${entry.version}` : ""}
+        </small>
+        {entry.note && <small className="model-card-note">{entry.note}</small>}
+        {entry.error && <small className="model-card-note error">{entry.error}</small>}
+        {entry.path && (
+          <small className="model-card-path" title={entry.path}>
+            {entry.path}
+          </small>
+        )}
+      </div>
+      <div className="model-card-actions">
+        {entry.kind === "character_recognizer" && installed && !entry.active && (
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={onActivate}
+            disabled={busy}
+          >
+            <CircleCheck size={15} /> 设为当前
+          </button>
+        )}
+        {entry.downloadable && !installed && (
+          <button
+            type="button"
+            className="primary-button"
+            onClick={onInstall}
+            disabled={busy}
+          >
+            {busy ? <LoaderCircle size={15} className="spin" /> : <Download size={15} />}
+            下载{entry.size_mb > 0 ? ` ${formatBytes(entry.size_mb * 1024 ** 2)}` : ""}
+          </button>
+        )}
+        {entry.path && (
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={onOpenPath}
+            disabled={busy}
+          >
+            打开目录
+          </button>
+        )}
+        {!entry.bundled && entry.downloadable && entry.status !== "missing" && (
+          <button
+            type="button"
+            className="ghost-button danger"
+            onClick={onRemove}
+            disabled={busy || entry.active}
+            title={entry.active ? "正在使用中，请先切换到其他识别模型" : undefined}
+          >
+            <Trash2 size={15} /> 删除
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1779,7 +1997,6 @@ function RecognitionSettingsPanel({
         </div>
       </div>
 
-      <RecognizerModelSection settings={settings} onChange={onChange} />
       <ReferenceLibrarySection settings={settings} onChange={onChange} />
 
       <div className="settings-field">
@@ -2187,6 +2404,10 @@ export function SettingsPage({
           settings={settings}
           onChange={patchSettings}
         />
+      )}
+
+      {tab === "models" && (
+        <ModelSettingsPanel settings={settings} onChange={patchSettings} />
       )}
 
       {tab === "comfy" && (

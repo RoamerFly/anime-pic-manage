@@ -106,7 +106,12 @@ export type WorkerRuntimeMode = "executable" | "embedded_env";
 
 export type WorkerComputeDevice = "auto" | "cpu" | "cuda";
 
-export type SettingsTab = "environment" | "recognition" | "similarity" | "comfy";
+export type SettingsTab =
+  | "environment"
+  | "recognition"
+  | "similarity"
+  | "models"
+  | "comfy";
 
 export interface AppSettings {
   /** ONNX Runtime intra-op threads used by CPU recognition inference. */
@@ -469,31 +474,58 @@ export interface CudaInstallProgress {
   message: string;
 }
 
-/** An installed character recognizer as reported by the Worker. */
-export interface InstalledRecognizerModel {
-  id: string;
-  kind: string;
-  adapter: string;
-  version: string;
-  status: string;
-  active: boolean;
-  error?: string | null;
-}
+/** Where a catalog model is stored once it has been downloaded. */
+export type ModelDelivery = "models_dir" | "hf_cache";
 
-export interface RecognizerCatalogEntry {
+export type ModelInventoryStatus =
+  | "installed"
+  | "partial"
+  | "missing"
+  | "unavailable";
+
+/**
+ * One row of the unified model inventory shown in 设置 → 模型配置.
+ *
+ * Bundled models ship inside the package (the base recognizer and the head
+ * detector), catalog models are downloaded into `models\`, and the optional
+ * training/reference models live in the Hugging Face cache.
+ */
+export interface ModelInventoryEntry {
   id: string;
   name: string;
+  /** character_recognizer · head_detector · tagger · reference_backend */
   kind: string;
+  delivery: ModelDelivery;
   repo_id: string;
+  /** Expected download size from the catalog, in megabytes. */
   size_mb: number;
   license: string;
   note: string;
+  status: ModelInventoryStatus;
+  /** Bytes already present on disk (installed files or cached blobs). */
+  installed_bytes: number;
+  /** Resolved weights location: the model folder or the cache snapshot. */
+  path?: string | null;
+  /** True when the package already ships the model, so nothing is downloaded. */
+  bundled: boolean;
+  /** True when the catalog offers a download for a missing model. */
+  downloadable: boolean;
+  /** True when this entry is the recognizer the next scan will use. */
+  active: boolean;
+  adapter?: string | null;
+  version?: string | null;
+  error?: string | null;
 }
 
-export interface RecognizerInventory {
-  models: InstalledRecognizerModel[];
+export interface ModelInventory {
+  /** Folder holding downloaded recognizers and detectors. */
+  models_dir: string;
+  /** Hugging Face cache holding the optional training/reference models. */
+  cache_dir: string;
   active: string;
-  catalog: RecognizerCatalogEntry[];
+  entries: ModelInventoryEntry[];
+  /** Set when part of the inventory could not be collected (Worker offline). */
+  warning?: string | null;
 }
 
 /** State of the reference-image library used for unlabelled characters. */
