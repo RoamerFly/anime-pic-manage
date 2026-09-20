@@ -78,6 +78,8 @@ pub struct ComfyGenerateRequest {
     pub checkpoint: String,
     #[serde(default)]
     pub lora: Option<ComfyLoraSelection>,
+    /// Empty means "keep whatever the workflow already has".
+    #[serde(default)]
     pub positive: String,
     #[serde(default)]
     pub negative: String,

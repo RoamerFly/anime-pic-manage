@@ -4,6 +4,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   AlertCircle,
+  CircleCheck,
   FolderOpen,
   ImagePlus,
   Loader2,
@@ -81,6 +82,9 @@ export function GenerationPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Routine and error feedback appears as a toast at the top of the page and
+  // fades away on its own, so it never pushes the controls down.
+  const [toast, setToast] = useState<{ text: string; kind: "info" | "error" } | null>(null);
   const [progress, setProgress] = useState<ComfyProgress | null>(null);
   const [result, setResult] = useState<ComfyGenerateResult | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -199,6 +203,41 @@ export function GenerationPage() {
       if (!active || !response.payload) return;
       setTemplateDetail(response.payload.template);
       setNodeOverrides(response.payload.overrides ?? {});
+      // Mirror the workflow into the quick fields so the panel shows the
+      // template's own values instead of silently overriding them.
+      const detail = response.payload.template as {
+        prompt?: Record<string, unknown>;
+        bindings?: Record<string, unknown>;
+      } | null;
+      const graph = detail?.prompt ?? (detail as Record<string, unknown> | null);
+      const bindings = detail?.bindings ?? {};
+      const bound = (key: string): unknown => {
+        const path = bindings[key];
+        if (!Array.isArray(path)) return undefined;
+        let node: unknown = graph?.[String(path[0])];
+        for (const step of path.slice(1)) {
+          node = (node as Record<string, unknown> | undefined)?.[String(step)];
+        }
+        return node;
+      };
+      const text = bound("positive");
+      if (typeof text === "string") setPositive(text);
+      const negativeText = bound("negative");
+      if (typeof negativeText === "string") setNegative(negativeText);
+      const stepsValue = bound("steps");
+      if (typeof stepsValue === "number" && stepsValue > 0) setSteps(stepsValue);
+      const cfgValue = bound("cfg");
+      if (typeof cfgValue === "number" && cfgValue > 0) setCfg(cfgValue);
+      const samplerValue = bound("sampler");
+      if (typeof samplerValue === "string" && samplerValue) setSampler(samplerValue);
+      const schedulerValue = bound("scheduler");
+      if (typeof schedulerValue === "string" && schedulerValue) setScheduler(schedulerValue);
+      const widthValue = bound("width");
+      if (typeof widthValue === "number" && widthValue > 0) setWidth(widthValue);
+      const heightValue = bound("height");
+      if (typeof heightValue === "number" && heightValue > 0) setHeight(heightValue);
+      const batchValue = bound("batch");
+      if (typeof batchValue === "number" && batchValue > 0) setBatch(batchValue);
     })();
     return () => {
       active = false;
@@ -206,6 +245,19 @@ export function GenerationPage() {
   }, [template]);
 
   const saveOverrides = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (error) {
+      setToast({ text: error, kind: "error" });
+      return;
+    }
+    if (notice) setToast({ text: notice, kind: "info" });
+  }, [error, notice]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), toast.kind === "error" ? 8000 : 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
   const updateNodeOverride = useCallback(
     (nodeId: string, input: string, value: unknown) => {
       setNodeOverrides((current) => {
@@ -441,11 +493,6 @@ export function GenerationPage() {
             {status?.device ? ` · ${status.device}` : ""}
             {status?.vram_gb ? ` · ${status.vram_gb} GB` : ""}
           </span>
-          {notice && (
-            // Routine start/stop/cancel feedback stays on one line instead of
-            // taking a whole banner row of vertical space.
-            <span className="generation-progress-text">{notice}</span>
-          )}
           <button
             className="ghost-button"
             onClick={() =>
@@ -501,28 +548,18 @@ export function GenerationPage() {
         </div>
       </section>
 
-      {error && (
-        <div className="banner-callout banner-error">
-          <AlertCircle size={16} />
-          <span>{error}</span>
+      {toast && (
+        <div
+          className={`app-toast ${toast.kind}`}
+          role="status"
+          onClick={() => setToast(null)}
+        >
+          {toast.kind === "error" ? <AlertCircle size={15} /> : <CircleCheck size={15} />}
+          <span>{toast.text}</span>
         </div>
       )}
 
       <section className="panel-card generation-controls">
-        <div className="generation-presets">
-          <span className="eyebrow">提示词预设</span>
-          {QUALITY_PRESETS.map((preset) => (
-            <button
-              key={preset.id}
-              className="ghost-button compact"
-              onClick={() => applyPreset(preset)}
-              title={preset.hint}
-            >
-              {preset.label}
-            </button>
-          ))}
-        </div>
-
         <div className="generation-grid">
           <label className="generation-field">
             <span>工作流模板</span>
@@ -568,25 +605,6 @@ export function GenerationPage() {
               step="0.05"
               value={loraStrength}
               onChange={(e) => setLoraStrength(Number(e.target.value))}
-            />
-          </label>
-        </div>
-
-        <div className="generation-prompts">
-          <label className="generation-field">
-            <span>正向提示词</span>
-            <textarea
-              rows={3}
-              value={positive}
-              onChange={(e) => setPositive(e.target.value)}
-            />
-          </label>
-          <label className="generation-field">
-            <span>负向提示词</span>
-            <textarea
-              rows={3}
-              value={negative}
-              onChange={(e) => setNegative(e.target.value)}
             />
           </label>
         </div>

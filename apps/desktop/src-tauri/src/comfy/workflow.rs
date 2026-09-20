@@ -194,22 +194,47 @@ impl WorkflowTemplate {
     /// Build the ComfyUI prompt (API format) for one request.
     pub fn build_prompt(&self, request: &ComfyGenerateRequest) -> Result<Value, ComfyError> {
         let mut template = self.clone();
-        template.set_bound("checkpoint", json!(request.checkpoint));
-        template.set_bound("positive", json!(request.positive));
-        template.set_bound("negative", json!(request.negative));
-        template.set_bound("steps", json!(request.steps));
-        template.set_bound("cfg", json!(request.cfg));
-        template.set_bound("sampler", json!(request.sampler));
-        template.set_bound("scheduler", json!(request.scheduler));
-        template.set_bound("width", json!(request.width));
-        template.set_bound("height", json!(request.height));
-        template.set_bound("batch", json!(request.batch));
+        // The workflow is the source of truth: only values the caller actually
+        // supplied override it, so an untouched field keeps the template's own
+        // setting instead of being replaced by this struct's defaults.
+        if !request.checkpoint.trim().is_empty() {
+            template.set_bound("checkpoint", json!(request.checkpoint));
+        }
+        if !request.positive.trim().is_empty() {
+            template.set_bound("positive", json!(request.positive));
+        }
+        if !request.negative.trim().is_empty() {
+            template.set_bound("negative", json!(request.negative));
+        }
+        if request.steps > 0 {
+            template.set_bound("steps", json!(request.steps));
+        }
+        if request.cfg > 0.0 {
+            template.set_bound("cfg", json!(request.cfg));
+        }
+        if !request.sampler.trim().is_empty() {
+            template.set_bound("sampler", json!(request.sampler));
+        }
+        if !request.scheduler.trim().is_empty() {
+            template.set_bound("scheduler", json!(request.scheduler));
+        }
+        if request.width > 0 {
+            template.set_bound("width", json!(request.width));
+        }
+        if request.height > 0 {
+            template.set_bound("height", json!(request.height));
+        }
+        if request.batch > 0 {
+            template.set_bound("batch", json!(request.batch));
+        }
         template.set_bound("seed", json!(resolved_seed(request.seed)));
-        let prefix = request
+        if let Some(prefix) = request
             .filename_prefix
             .clone()
-            .unwrap_or_else(|| "anime-pic-manage".to_string());
-        template.set_bound("filename_prefix", json!(prefix));
+            .filter(|value| !value.trim().is_empty())
+        {
+            template.set_bound("filename_prefix", json!(prefix));
+        }
 
         if template.supports_lora() {
             match request
@@ -306,6 +331,35 @@ mod tests {
             node_overrides: None,
             filename_prefix: Some("anime".to_string()),
         }
+    }
+
+    #[test]
+    fn omitted_quick_parameters_keep_the_template_values() {
+        // With the graph as the source of truth, a request that only picks a
+        // checkpoint must not overwrite the workflow's prompts or sampler.
+        let bare = ComfyGenerateRequest {
+            checkpoint: String::new(),
+            positive: String::new(),
+            negative: String::new(),
+            steps: 0,
+            cfg: 0.0,
+            sampler: String::new(),
+            scheduler: String::new(),
+            width: 0,
+            height: 0,
+            batch: 0,
+            filename_prefix: None,
+            ..request()
+        };
+
+        let built = template().build_prompt(&bare).expect("prompt builds");
+
+        // The fixture's own values must survive untouched.
+        assert_eq!(built["6"]["inputs"]["text"], "");
+        assert_eq!(built["3"]["inputs"]["steps"], 20);
+        assert_eq!(built["5"]["inputs"]["width"], 512);
+        assert_eq!(built["9"]["inputs"]["filename_prefix"], "ComfyUI");
+        assert_eq!(built["4"]["inputs"]["ckpt_name"], "old.safetensors");
     }
 
     #[test]

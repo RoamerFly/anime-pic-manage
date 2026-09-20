@@ -98,6 +98,50 @@
   font-size: calc(11 * var(--ui-font-step, 1px));
 }
 
+.app-toast {
+  position: fixed;
+  top: calc(14 * var(--ui-font-step, 1px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(680px, 82vw);
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid #d7dcec;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 6px 20px rgb(23 33 61 / 14%);
+  font-size: calc(11.5 * var(--ui-font-step, 1px));
+  color: #3d4759;
+  cursor: pointer;
+  animation: app-toast-in 0.16s ease-out;
+}
+
+.app-toast.error {
+  border-color: #f0c3c3;
+  color: #a33a3a;
+  background: rgb(255 248 248 / 97%);
+}
+
+.app-toast span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes app-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
 .generation-results {
   display: flex;
   flex-direction: column;
