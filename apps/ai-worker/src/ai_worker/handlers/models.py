@@ -7,10 +7,13 @@ exist and both are handled here:
   from Hugging Face into ``models\\<kind>\\<id>\\`` together with the manifest the
   rest of the pipeline already understands.
 * ``model.cache.status`` / ``model.cache.prefetch`` / ``model.cache.delete`` —
-  optional models that the pipeline pulls from the shared Hugging Face cache on
-  first use (the WD14 tagger, the CCIP reference model). They stay in the cache
-  so ``imgutils`` keeps finding them by repo id, but the settings page still has
-  to be able to report, pre-download and clear them.
+  optional models that the pipeline pulls from the application's Hugging Face
+  cache on first use (the WD14 tagger, the CCIP reference model). They stay in
+  the cache so ``imgutils`` keeps finding them by repo id, but the settings page
+  still has to be able to report, pre-download and clear them.
+* ``model.cache.adopt`` — copy repositories a machine-wide cache already holds
+  into the application cache. Pinning the cache inside the package must not
+  cost a fresh download of several hundred megabytes.
 
 Nothing here needs network access to *run* a model, only to install one.
 """
@@ -451,4 +454,92 @@ def handle_model_cache_delete(
         "repo_ids": removed,
         "freed_bytes": freed,
         "warning": scan_error,
+    }
+
+
+def _cache_repository_root(path: Path) -> Path:
+    """Accept either a ``HF_HOME`` folder or the ``hub`` folder inside it."""
+
+    hub = path / "hub"
+    return hub if hub.is_dir() else path
+
+
+def handle_model_cache_adopt(
+    service: Any,
+    payload: Mapping[str, object],
+    *,
+    on_progress: Callable[[str, int, int, str], None] | None = None,
+) -> dict[str, Any]:
+    """Copy repositories another cache already holds into the application cache.
+
+    The application keeps every model inside its own folder, which would
+    otherwise mean re-downloading hundreds of megabytes that this machine
+    already has. Adopting copies the repository folders over and leaves the
+    source untouched: other tools may still be sharing it.
+    """
+
+    cache_dir = _hub_cache_dir()
+    source = Path(
+        _required_string(payload, "source_dir", context="model.cache.adopt")
+    ).expanduser()
+    raw = payload.get("repo_ids")
+    if not isinstance(raw, list):
+        raise WorkerError("INVALID_PAYLOAD", "model.cache.adopt 需要 repo_ids 数组")
+    wanted = sorted(
+        {item.strip() for item in raw if isinstance(item, str) and item.strip()}
+    )
+    if not wanted:
+        raise WorkerError("INVALID_PAYLOAD", "model.cache.adopt 需要非空 repo_ids 数组")
+    if len(wanted) > MAX_CACHE_ENTRIES:
+        raise WorkerError(
+            "INVALID_PAYLOAD", f"repo_ids 不能超过 {MAX_CACHE_ENTRIES} 项"
+        )
+
+    source_root = _cache_repository_root(source)
+    target_root = _cache_repository_root(cache_dir)
+    if not source_root.is_dir():
+        raise WorkerError(
+            "MODEL_ADOPT_SOURCE_MISSING", f"源缓存目录不存在: {source_root}"
+        )
+    if source_root == target_root:
+        raise WorkerError(
+            "INVALID_PAYLOAD", "源缓存与软件自己的缓存是同一个目录，无需复制"
+        )
+
+    adopted: list[dict[str, Any]] = []
+    missing: list[str] = []
+    total = len(wanted)
+    for index, repo_id in enumerate(wanted):
+        folder = f"models--{repo_id.replace('/', '--')}"
+        origin = source_root / folder
+        if not origin.is_dir():
+            missing.append(repo_id)
+            continue
+        if on_progress is not None:
+            on_progress("copying", index + 1, total, repo_id)
+        destination = target_root / folder
+        try:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            # ``dirs_exist_ok`` merges with a partially downloaded repository
+            # instead of failing, and copying follows the snapshot links so the
+            # result is a self-contained folder.
+            shutil.copytree(origin, destination, dirs_exist_ok=True)
+        except OSError as exc:
+            raise WorkerError(
+                "MODEL_ADOPT_FAILED", f"复制缓存 {repo_id} 失败: {exc}"
+            ) from exc
+        adopted.append({"repo_id": repo_id, "bytes": _directory_size(destination)})
+
+    if not adopted:
+        raise WorkerError(
+            "MODEL_ADOPT_SOURCE_MISSING",
+            f"源缓存里没有这些模型: {', '.join(missing)}",
+        )
+
+    return {
+        "cache_dir": str(cache_dir),
+        "source_dir": str(source_root),
+        "adopted": adopted,
+        "missing": missing,
+        "total_bytes": sum(item["bytes"] for item in adopted),
     }

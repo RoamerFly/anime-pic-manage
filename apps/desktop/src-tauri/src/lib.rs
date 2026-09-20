@@ -88,12 +88,13 @@ pub fn init_state(app: &tauri::App) -> Result<AppState, CoreInitError> {
         app_settings.recognition_onnx_threads,
     );
     worker.set_cuda_runtime_dir(Some(app_settings.cuda_runtime_dir.clone()));
+    worker.set_data_dir(Some(data_dir.to_string_lossy().into_owned()));
     worker.set_below_normal_priority(app_settings.background_priority != "normal");
-    Ok(AppState::new(
-        database,
-        data_dir.to_string_lossy().into_owned(),
-        worker,
-    ))
+    let state = AppState::new(database, data_dir.to_string_lossy().into_owned(), worker);
+    if let Ok(mut kohya) = state.kohya.lock() {
+        kohya.set_hf_cache_dir(Some(data_dir.join("hf-cache")));
+    }
+    Ok(state)
 }
 
 pub fn run() {
@@ -167,6 +168,7 @@ pub fn run() {
             set_active_recognizer,
             install_catalog_model,
             delete_catalog_model,
+            adopt_legacy_model_cache,
             get_reference_library_status,
             build_reference_library,
             clear_reference_library,

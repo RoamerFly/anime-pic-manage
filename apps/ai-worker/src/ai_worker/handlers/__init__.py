@@ -2,6 +2,7 @@
 
 from .dataset import handle_dataset_export
 from .models import (
+    handle_model_cache_adopt,
     handle_model_cache_delete,
     handle_model_cache_prefetch,
     handle_model_cache_status,
@@ -38,6 +39,7 @@ __all__ = [
     "handle_enumerate",
     "handle_export",
     "handle_fusion",
+    "handle_model_cache_adopt",
     "handle_model_cache_delete",
     "handle_model_cache_prefetch",
     "handle_model_cache_status",

@@ -908,6 +908,48 @@
   font-size: calc(11.5 * var(--ui-font-step, 1px));
 }
 
+/* Offers to reuse a machine-wide cache instead of downloading again. */
+.model-adopt-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid #dfe3f7;
+  border-radius: 9px;
+  background: #f6f7ff;
+}
+
+.model-adopt-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.model-adopt-copy strong {
+  color: #4a58c4;
+  font-size: calc(12.5 * var(--ui-font-step, 1px));
+}
+
+.model-adopt-copy small {
+  color: #7c86a0;
+  font-size: calc(11.5 * var(--ui-font-step, 1px));
+  line-height: 1.5;
+}
+
+.model-adopt-copy code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: #ecedfa;
+  font-size: calc(11 * var(--ui-font-step, 1px));
+  word-break: break-all;
+}
+
+.model-adopt-banner .ghost-button {
+  flex: 0 0 auto;
+}
+
 .model-group {
   padding: 10px 0 2px;
   border-bottom: 1px solid #f2f3f7;

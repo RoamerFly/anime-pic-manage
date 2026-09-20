@@ -9,6 +9,7 @@ from huggingface_hub import constants
 
 from ai_worker.errors import WorkerError
 from ai_worker.handlers.models import (
+    handle_model_cache_adopt,
     handle_model_cache_delete,
     handle_model_cache_prefetch,
     handle_model_cache_status,
@@ -365,5 +366,103 @@ def test_cache_delete_removes_the_repository_folder(
 def test_cache_delete_requires_repository_ids(tmp_path: Path) -> None:
     with pytest.raises(WorkerError) as error:
         handle_model_cache_delete(_Service(tmp_path / "models"), {"id": "wd14"})
+
+    assert error.value.code == "INVALID_PAYLOAD"
+
+
+def test_cache_adopt_copies_the_repositories_the_other_cache_holds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    legacy = tmp_path / "legacy"
+    own = tmp_path / "package" / "data" / "hf-cache" / "hub"
+    _seed_cache_file(legacy, "owner/repo", "a/model.onnx", b"x" * 32)
+    _seed_cache_file(legacy, "deepghs/ccip_onnx", "feat.onnx", b"y" * 16)
+    monkeypatch.setattr(constants, "HF_HUB_CACHE", str(own))
+
+    result = handle_model_cache_adopt(
+        _Service(tmp_path / "models"),
+        {"source_dir": str(legacy), "repo_ids": ["owner/repo", "deepghs/ccip_onnx"]},
+    )
+
+    assert result["cache_dir"] == str(own)
+    assert [item["repo_id"] for item in result["adopted"]] == [
+        "deepghs/ccip_onnx",
+        "owner/repo",
+    ]
+    assert result["missing"] == []
+    assert result["total_bytes"] > 0
+    # The files themselves arrive, not just the folder skeleton.
+    digest = hashlib.sha256(b"x" * 32).hexdigest()
+    assert (
+        own / "models--owner--repo" / "snapshots" / digest / "a" / "model.onnx"
+    ).read_bytes() == b"x" * 32
+    # Other tools may still share the source cache, so it stays untouched.
+    assert (legacy / "models--owner--repo").is_dir()
+
+
+def test_cache_adopt_accepts_an_hf_home_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "hf-home"
+    own = tmp_path / "own"
+    _seed_cache_file(home / "hub", "owner/repo", "a.onnx", b"x" * 8)
+    monkeypatch.setattr(constants, "HF_HUB_CACHE", str(own))
+
+    result = handle_model_cache_adopt(
+        _Service(tmp_path / "models"),
+        {"source_dir": str(home), "repo_ids": ["owner/repo"]},
+    )
+
+    assert result["source_dir"] == str(home / "hub")
+    assert (own / "models--owner--repo").is_dir()
+
+
+def test_cache_adopt_merges_into_a_partially_downloaded_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    legacy = tmp_path / "legacy"
+    own = tmp_path / "own"
+    _seed_cache_file(legacy, "owner/repo", "a/model.onnx", b"x" * 32)
+    _seed_cache_file(own, "owner/repo", "a/model.onnx", b"partial")
+    monkeypatch.setattr(constants, "HF_HUB_CACHE", str(own))
+
+    handle_model_cache_adopt(
+        _Service(tmp_path / "models"),
+        {"source_dir": str(legacy), "repo_ids": ["owner/repo"]},
+    )
+
+    digest = hashlib.sha256(b"x" * 32).hexdigest()
+    copied = own / "models--owner--repo" / "snapshots" / digest / "a" / "model.onnx"
+    assert copied.read_bytes() == b"x" * 32
+
+
+def test_cache_adopt_refuses_a_source_without_the_models(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    legacy = tmp_path / "legacy"
+    legacy.mkdir()
+    monkeypatch.setattr(constants, "HF_HUB_CACHE", str(tmp_path / "own"))
+
+    with pytest.raises(WorkerError) as error:
+        handle_model_cache_adopt(
+            _Service(tmp_path / "models"),
+            {"source_dir": str(legacy), "repo_ids": ["owner/repo"]},
+        )
+
+    assert error.value.code == "MODEL_ADOPT_SOURCE_MISSING"
+
+
+def test_cache_adopt_refuses_to_copy_onto_itself(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    own = tmp_path / "own"
+    _seed_cache_file(own, "owner/repo", "a.onnx", b"x" * 8)
+    monkeypatch.setattr(constants, "HF_HUB_CACHE", str(own))
+
+    with pytest.raises(WorkerError) as error:
+        handle_model_cache_adopt(
+            _Service(tmp_path / "models"),
+            {"source_dir": str(own), "repo_ids": ["owner/repo"]},
+        )
 
     assert error.value.code == "INVALID_PAYLOAD"

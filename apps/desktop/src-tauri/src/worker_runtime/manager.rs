@@ -24,6 +24,9 @@ pub struct WorkerManager {
     onnx_threads: u32,
     /// Optional folder holding CUDA 12 / cuDNN 9 DLLs for GPU inference.
     cuda_runtime_dir: Option<String>,
+    /// Application data folder. The Worker pins its Hugging Face cache inside
+    /// it so every downloaded model lives with the package.
+    data_dir: Option<String>,
     /// Lower the Worker's CPU priority so long scans stay polite.
     below_normal_priority: bool,
     child: Option<Child>,
@@ -65,6 +68,7 @@ impl WorkerManager {
             compute_device,
             onnx_threads,
             cuda_runtime_dir: None,
+            data_dir: None,
             below_normal_priority: true,
             child: None,
             stdin: None,
@@ -120,6 +124,28 @@ impl WorkerManager {
             self.clear_process();
             self.below_normal_priority = below_normal;
         }
+    }
+
+    /// Point the Worker at the application data folder.
+    ///
+    /// The Worker keeps its Hugging Face cache under `<data_dir>\hf-cache` so
+    /// the tagging model, the CCIP model and any reference embeddings stay with
+    /// the package instead of leaking into the user profile.
+    pub fn set_data_dir(&mut self, data_dir: Option<String>) {
+        let normalized = data_dir
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        if self.data_dir != normalized {
+            self.clear_process();
+            self.data_dir = normalized;
+        }
+    }
+
+    /// `None` when the data folder is unknown; the Worker then falls back to
+    /// the machine-wide Hugging Face cache.
+    pub fn hf_cache_dir(&self) -> Option<PathBuf> {
+        let data_dir = self.data_dir.as_deref()?;
+        Some(PathBuf::from(data_dir).join("hf-cache"))
     }
 
     #[cfg(test)]
@@ -272,6 +298,9 @@ impl WorkerManager {
             .stderr(Stdio::null());
         if let Some(cuda_runtime_dir) = self.cuda_runtime_dir.as_deref() {
             command.env("ANIME_PIC_CUDA_RUNTIME_DIR", cuda_runtime_dir);
+        }
+        if let Some(hf_cache_dir) = self.hf_cache_dir() {
+            command.env("ANIME_PIC_HF_CACHE", hf_cache_dir);
         }
         configure_background_command_with(&mut command, self.below_normal_priority);
         let mut child = command

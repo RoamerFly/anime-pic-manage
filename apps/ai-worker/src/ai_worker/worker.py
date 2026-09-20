@@ -27,6 +27,7 @@ from .handlers import (
     handle_enumerate,
     handle_export,
     handle_fusion,
+    handle_model_cache_adopt,
     handle_model_cache_delete,
     handle_model_cache_prefetch,
     handle_model_cache_status,
@@ -218,6 +219,8 @@ class WorkerService:
             return handle_model_cache_prefetch(self, request.payload)
         if message_type in {"model.cache.delete", "model_cache_delete"}:
             return handle_model_cache_delete(self, request.payload)
+        if message_type in {"model.cache.adopt", "model_cache_adopt"}:
+            return handle_model_cache_adopt(self, request.payload)
         if message_type in {
             "library.images.list",
             "images.enumerate",

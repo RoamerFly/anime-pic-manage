@@ -6,6 +6,7 @@ import {
   ChevronRight,
   CircleCheck,
   CircleHelp,
+  Copy,
   Cpu,
   Download,
   FolderCog,
@@ -30,6 +31,7 @@ import type {
   GpuInventory,
   KohyaEnvironment,
   KohyaStatus,
+  LegacyModelCache,
   ModelInventory,
   ModelInventoryEntry,
   ReferenceLibraryStatus,
@@ -1732,6 +1734,33 @@ function ModelSettingsPanel({
     void invokeCore<void>("show_item_in_folder", "system.explorer.show", { path });
   };
 
+  /**
+   * Copy a cache this machine already filled into the application folder.
+   * Pinning every model inside the package must not mean downloading the
+   * tagging and reference models a second time.
+   */
+  const adopt = async (legacy: LegacyModelCache) => {
+    setBusy("adopt");
+    setMessage(null);
+    setError(null);
+    try {
+      const response = await invokeCore<unknown>(
+        "adopt_legacy_model_cache",
+        "model.adopt",
+      );
+      if (response.error) {
+        setError(response.error.message);
+      } else {
+        setMessage(
+          `已从 ${legacy.path} 复制 ${legacy.repos.length} 个模型到软件缓存，无需重新下载。`,
+        );
+      }
+      await refresh();
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const entries = inventory?.entries ?? [];
   const ready = entries.filter((entry) => entry.status === "installed");
   const usedBytes = ready.reduce((total, entry) => total + entry.installed_bytes, 0);
@@ -1761,8 +1790,9 @@ function ModelSettingsPanel({
         <div>
           <strong>存储位置</strong>
           <small>
-            角色识别模型与检测模型下载到模型目录；打标、参考匹配模型走 Hugging Face
-            缓存。“删除”只清理这两个目录里的模型文件。
+            角色识别模型与检测模型下载到模型目录；打标、参考匹配模型走软件自带的数据目录
+            （data\hf-cache）。两者都在软件目录内，复制或删除整个软件目录即可迁移或彻底清理。
+            “删除”只清理这两个目录里的模型文件。
           </small>
         </div>
         <div className="model-path-list">
@@ -1819,6 +1849,16 @@ function ModelSettingsPanel({
           刷新
         </button>
       </div>
+
+      {inventory?.legacy_cache && (
+        <ModelAdoptBanner
+          legacy={inventory.legacy_cache}
+          busy={busy !== null}
+          onAdopt={() =>
+            void adopt(inventory.legacy_cache as LegacyModelCache)
+          }
+        />
+      )}
 
       {groups.map((group) => (
         <div className="model-group" key={group.id}>
@@ -1882,6 +1922,48 @@ function ModelSettingsPanel({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Offers to copy a machine-wide cache into the application folder.
+ *
+ * Shown only when another cache already holds models this package still
+ * misses, so pinning the cache never silently costs a fresh download.
+ */
+export function ModelAdoptBanner({
+  legacy,
+  busy,
+  onAdopt,
+}: {
+  legacy: LegacyModelCache;
+  busy: boolean;
+  onAdopt: () => void;
+}) {
+  return (
+    <div className="model-adopt-banner">
+      <div className="model-adopt-copy">
+        <strong>检测到本机已有的模型缓存</strong>
+        <small>
+          <code title={legacy.path}>{legacy.path}</code> 里已存有本软件需要的{" "}
+          {legacy.repos.length} 个模型（{formatBytes(legacy.bytes)}）。复制进软件目录即可免去重新
+          下载，原位置的文件不会被删除。
+        </small>
+      </div>
+      <button
+        type="button"
+        className="ghost-button"
+        onClick={onAdopt}
+        disabled={busy}
+      >
+        {busy ? (
+          <LoaderCircle size={15} className="spin" />
+        ) : (
+          <Copy size={15} />
+        )}
+        复制到软件目录
+      </button>
+    </div>
   );
 }
 

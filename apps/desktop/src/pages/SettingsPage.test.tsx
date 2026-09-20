@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ModelInventoryEntry } from "@anime-pic-manage/shared-types";
-import { ModelCard } from "./SettingsPage";
+import type {
+  LegacyModelCache,
+  ModelInventoryEntry,
+} from "@anime-pic-manage/shared-types";
+import { ModelAdoptBanner, ModelCard } from "./SettingsPage";
 
 function entry(overrides: Partial<ModelInventoryEntry> = {}): ModelInventoryEntry {
   return {
@@ -95,5 +98,34 @@ describe("模型配置的模型卡片", () => {
     expect(html).toContain("2.0 MB");
     expect(html).toContain("下载 446 MB");
     expect(html).toContain("删除");
+  });
+});
+
+describe("模型配置的旧缓存迁入提示", () => {
+  const legacy: LegacyModelCache = {
+    path: "E:/Cache/huggingface_cache/hub",
+    repos: ["deepghs/ccip_onnx", "SmilingWolf/wd-swinv2-tagger-v3"],
+    bytes: 618_000_000,
+  };
+
+  it("names the other cache, its size and what copying costs", () => {
+    const html = renderToStaticMarkup(
+      <ModelAdoptBanner legacy={legacy} busy={false} onAdopt={() => {}} />,
+    );
+
+    expect(html).toContain("E:/Cache/huggingface_cache/hub");
+    expect(html).toContain("2 个模型");
+    expect(html).toContain("589 MB");
+    expect(html).toContain("复制到软件目录");
+    expect(html).toContain("原位置的文件不会被删除");
+    expect(html).not.toMatch(/<button[^>]*disabled/);
+  });
+
+  it("locks the button while the copy runs", () => {
+    const html = renderToStaticMarkup(
+      <ModelAdoptBanner legacy={legacy} busy onAdopt={() => {}} />,
+    );
+
+    expect(html).toMatch(/<button[^>]*disabled/);
   });
 });

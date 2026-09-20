@@ -71,6 +71,9 @@ impl RunState {
 pub struct KohyaManager {
     child: Option<Child>,
     state: Arc<Mutex<RunState>>,
+    /// Application cache folder handed to the trainer as its Hugging Face home,
+    /// so anything sd-scripts pulls down stays inside the package.
+    hf_cache_dir: Option<PathBuf>,
 }
 
 /// Sink for streamed progress, so the process plumbing can be tested without a
@@ -129,7 +132,13 @@ impl KohyaManager {
         Self {
             child: None,
             state: Arc::new(Mutex::new(RunState::default())),
+            hf_cache_dir: None,
         }
+    }
+
+    /// Keep the trainer's Hugging Face downloads inside the application folder.
+    pub fn set_hf_cache_dir(&mut self, dir: Option<PathBuf>) {
+        self.hf_cache_dir = dir;
     }
 
     fn lock(&self) -> Result<std::sync::MutexGuard<'_, RunState>, String> {
@@ -255,6 +264,15 @@ impl KohyaManager {
             .try_clone()
             .map_err(|error| format!("无法写入训练日志: {error}"))?;
 
+        // sd-scripts fetches tokenizers and base models through
+        // ``huggingface_hub``; pointing it at the application cache keeps the
+        // download next to the rest of the software instead of in the user
+        // profile.
+        if let Some(cache_dir) = self.hf_cache_dir.as_ref() {
+            command
+                .env("HF_HOME", cache_dir)
+                .env("HF_HUB_CACHE", cache_dir.join("hub"));
+        }
         configure_background_command_with(&mut command, below_normal_priority);
 
         let mut child = command
@@ -433,7 +451,7 @@ mod tests {
         if cfg!(windows) {
             fs::write(
                 dir.join("env.cmd"),
-                "@echo off\r\necho unbuffered=%PYTHONUNBUFFERED%\r\necho alloc=%PYTORCH_CUDA_ALLOC_CONF%\r\n",
+                "@echo off\r\necho unbuffered=%PYTHONUNBUFFERED%\r\necho alloc=%PYTORCH_CUDA_ALLOC_CONF%\r\necho hf_home=%HF_HOME%\r\necho hub=%HF_HUB_CACHE%\r\n",
             )
             .unwrap();
             (
@@ -443,7 +461,7 @@ mod tests {
         } else {
             fs::write(
                 dir.join("env.sh"),
-                "echo unbuffered=$PYTHONUNBUFFERED\necho alloc=$PYTORCH_CUDA_ALLOC_CONF\n",
+                "echo unbuffered=$PYTHONUNBUFFERED\necho alloc=$PYTORCH_CUDA_ALLOC_CONF\necho hf_home=$HF_HOME\necho hub=$HF_HUB_CACHE\n",
             )
             .unwrap();
             (PathBuf::from("sh"), vec!["env.sh".to_string()])
@@ -461,6 +479,7 @@ mod tests {
         // Uses the real `start` path so the variables under test are exactly
         // the ones production sets.
         let mut manager = KohyaManager::new();
+        manager.set_hf_cache_dir(Some(dir.join("hf-cache")));
         manager
             .start(
                 Arc::new(RecordingSink::default()),
@@ -483,6 +502,11 @@ mod tests {
         let logged = fs::read_to_string(&log_path).unwrap();
         assert!(logged.contains("unbuffered=1"), "log was {logged}");
         assert!(logged.contains("expandable_segments"), "log was {logged}");
+        // Training downloads stay inside the application folder.
+        assert!(
+            logged.contains("hf-cache") && logged.contains("hub"),
+            "log was {logged}"
+        );
         fs::remove_dir_all(dir).unwrap();
     }
 

@@ -99,10 +99,12 @@ Get-FileHash .\models\recognizer\animetimm-resnet101-dbv4-full\model.onnx -Algor
 
 ## 打标模型（LoRA 训练集导出）
 
-「AI 生图 → 训练集导出」用 WD14 打标器把裁剪后的角色图转成 Danbooru 标签 caption。当前固定使用 `SwinV2_v3`（`dghs-imgutils` 的默认档位）：权重取自 `deepghs/wd14_tagger_with_embeddings` 里的 `SmilingWolf/wd-swinv2-tagger-v3/model.onnx`，标签表取自 `SmilingWolf/wd-swinv2-tagger-v3/selected_tags.csv`。两个文件通过 `huggingface_hub` 下载到本机 Hugging Face 缓存（受 `HF_HOME` 控制），不写入仓库、不随安装包分发。
+「AI 生图 → 训练集导出」用 WD14 打标器把裁剪后的角色图转成 Danbooru 标签 caption。当前固定使用 `SwinV2_v3`（`dghs-imgutils` 的默认档位）：权重取自 `deepghs/wd14_tagger_with_embeddings` 里的 `SmilingWolf/wd-swinv2-tagger-v3/model.onnx`，标签表取自 `SmilingWolf/wd-swinv2-tagger-v3/selected_tags.csv`。两个文件通过 `huggingface_hub` 下载，但缓存被固定在软件目录内（`data\hf-cache\hub`），不写入仓库、不落用户目录。
 
 - 权重约 446MB，未提前下载时会在首次导出时才拉取；离线或无法访问 huggingface.co 时导出会失败，其余识别功能不受影响。
+- 桌面端与 Worker 都会把 `HF_HOME` / `HF_HUB_CACHE` 指到 `<软件目录>\data\hf-cache`：便携包拷到别的机器、换个账号运行，打标与参考匹配模型都还在。
 - 同一个模型和 CCIP 参考匹配模型都可以在 **设置 → 模型配置** 里提前下载、查看状态和删除；面板会显示实际的缓存目录，删除后下次使用会重新下载。
+- 如果本机其他位置（`HF_HOME`、`HF_HUB_CACHE`、`%USERPROFILE%\.cache\huggingface\hub`、`%LOCALAPPDATA%\huggingface\hub`）已经存有这些模型，面板会出现「复制到软件目录」按钮，直接复制即可免去重新下载；复制不会删除源目录。
 - 通用标签阈值默认 `0.35`、角色标签阈值默认 `0.85`；`rating_*` 标签不写入 caption。
 - 打标结果只是初稿，导出后建议抽查 caption 再交给 kohya 训练；训练器与权重许可证按各自上游执行。
 

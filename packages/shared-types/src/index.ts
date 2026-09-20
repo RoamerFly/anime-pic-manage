@@ -61,6 +61,7 @@ export type MessageType =
   | "model.activate"
   | "model.install"
   | "model.delete"
+  | "model.adopt"
   | "reference.status"
   | "reference.build"
   | "reference.clear"
@@ -520,12 +521,32 @@ export interface ModelInventoryEntry {
 export interface ModelInventory {
   /** Folder holding downloaded recognizers and detectors. */
   models_dir: string;
-  /** Hugging Face cache holding the optional training/reference models. */
+  /**
+   * Hugging Face cache holding the optional training/reference models. Always
+   * inside the application directory so a portable copy carries everything.
+   */
   cache_dir: string;
   active: string;
   entries: ModelInventoryEntry[];
+  /** Present when another cache on this machine could supply missing models. */
+  legacy_cache?: LegacyModelCache | null;
   /** Set when part of the inventory could not be collected (Worker offline). */
   warning?: string | null;
+}
+
+/**
+ * A Hugging Face cache outside the application directory that already holds
+ * repositories the application cache is missing. Copying it in avoids
+ * re-downloading hundreds of megabytes after the cache was pinned to the
+ * package folder.
+ */
+export interface LegacyModelCache {
+  /** Hub cache root of the other cache, e.g. `%USERPROFILE%\.cache\huggingface\hub`. */
+  path: string;
+  /** Repositories it can supply that the application cache does not have yet. */
+  repos: string[];
+  /** Bytes those missing repositories occupy over there. */
+  bytes: number;
 }
 
 /** State of the reference-image library used for unlabelled characters. */
