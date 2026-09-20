@@ -347,7 +347,7 @@ export function GenerationPage() {
     runAction("stop", async () => {
       const response = await invokeCore<ComfyStatus>("comfy_stop", "comfy.stop");
       setStatus(response.payload ?? null);
-      setNotice("已停止本应用启动的 ComfyUI。");
+      setNotice("已停止 ComfyUI。");
     });
 
   const generate = () =>
@@ -513,8 +513,12 @@ export function GenerationPage() {
             <button
               className="ghost-button"
               onClick={() => void stopComfy()}
-              disabled={busy !== null || !status?.owned}
-              title={status?.owned ? "停止本应用启动的 ComfyUI" : "该实例由你手动启动，应用不会关闭它"}
+              disabled={busy !== null || !status?.running}
+              title={
+                status?.owned
+                  ? "停止本应用启动的 ComfyUI"
+                  : "结束占用该端口的 ComfyUI 进程（仅限 Python 进程）"
+              }
             >
               {busy === "stop" ? (
                 <Loader2 size={15} className="spin" />

@@ -297,6 +297,71 @@ pub async fn comfy_start(
     )
 }
 
+/// PID of the process listening on `port`, if any.
+fn listener_pid(port: u16) -> Option<u32> {
+    let output = std::process::Command::new("netstat")
+        .args(["-ano", "-p", "tcp"])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    let needle = format!(":{port}");
+    for line in text.lines() {
+        let columns: Vec<&str> = line.split_whitespace().collect();
+        if columns.len() < 5 || !columns[0].eq_ignore_ascii_case("TCP") {
+            continue;
+        }
+        if !columns[1].ends_with(&needle) || !columns[3].eq_ignore_ascii_case("LISTENING") {
+            continue;
+        }
+        if let Ok(pid) = columns[4].parse::<u32>() {
+            return Some(pid);
+        }
+    }
+    None
+}
+
+fn process_name(pid: u32) -> Option<String> {
+    let output = std::process::Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    let first = text.lines().next()?.trim();
+    let name = first.trim_matches('"').split("\",\"").next()?.to_string();
+    if name.is_empty() {
+        None
+    } else {
+        Some(name)
+    }
+}
+
+/// End a ComfyUI instance the app did not start (manual launch, or the app was
+/// restarted). Returns a message when the caller should be told why nothing
+/// happened; `None` means the port is free or the process was ended.
+fn stop_foreign_listener(port: u16) -> Option<String> {
+    let pid = listener_pid(port)?;
+    let Some(name) = process_name(pid) else {
+        return Some(format!("端口 {port} 被 PID {pid} 占用，但无法确认进程名。"));
+    };
+    if !name.to_ascii_lowercase().contains("python") {
+        return Some(format!(
+            "端口 {port} 被 {name}（PID {pid}）占用，它不是 Python/ComfyUI 进程，未自动结束。"
+        ));
+    }
+    let output = std::process::Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/T", "/F"])
+        .output()
+        .ok()?;
+    if output.status.success() {
+        None
+    } else {
+        Some(format!(
+            "结束 {name}（PID {pid}）失败：{}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
+    }
+}
+
 #[tauri::command]
 pub async fn comfy_stop(app: AppHandle, request_id: Option<String>) -> IpcEnvelope<ComfyStatus> {
     let request_id = normalize_request_id(request_id);
@@ -329,6 +394,16 @@ pub async fn comfy_stop(app: AppHandle, request_id: Option<String>) -> IpcEnvelo
                 None,
                 true,
             ),
+        );
+    }
+    // The instance may have been started outside the app (or the app was
+    // restarted): fall back to ending whatever ComfyUI process owns the port,
+    // but only when it really looks like a Python process.
+    if let Some(message) = stop_foreign_listener(settings.comfy_port) {
+        return failure(
+            "comfy.stop",
+            request_id.clone(),
+            core_error(&request_id, "COMFY_STOP_REFUSED", &message, None, false),
         );
     }
     let paths = resolve_paths(
