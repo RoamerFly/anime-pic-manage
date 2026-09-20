@@ -10,10 +10,13 @@ does) and checks three things:
 
 Usage:
     python scripts/verify_hf_cache_pinning.py [legacy_cache_dir]
+    python scripts/verify_hf_cache_pinning.py --worker dist_windows_gpu/app/runtime/ai-worker.exe \
+        E:/Cache/huggingface_cache/hub
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import shutil
@@ -43,18 +46,39 @@ def repo_ids() -> list[str]:
 class Worker:
     """Minimal JSON Lines client for ``run_worker.py``."""
 
-    def __init__(self, cache_dir: Path) -> None:
+    def __init__(
+        self,
+        cache_dir: Path | None,
+        executable: Path | None = None,
+    ) -> None:
         env = dict(os.environ)
-        env["ANIME_PIC_HF_CACHE"] = str(cache_dir)
-        env["ANIME_PIC_MODELS"] = str(REPO_ROOT / "models")
+        if cache_dir is None:
+            # No pinning at all: a packaged Worker has to derive the folder from
+            # its own location.
+            env.pop("ANIME_PIC_HF_CACHE", None)
+            env.pop("ANIME_PIC_MODELS", None)
+        else:
+            env["ANIME_PIC_HF_CACHE"] = str(cache_dir)
+            env["ANIME_PIC_MODELS"] = str(REPO_ROOT / "models")
         env["PYTHONUNBUFFERED"] = "1"
+        if executable is None:
+            command = [
+                sys.executable,
+                str(REPO_ROOT / "apps" / "ai-worker" / "run_worker.py"),
+            ]
+            cwd = REPO_ROOT / "apps" / "ai-worker"
+        else:
+            # A packaged Worker resolves its own models; the environment still
+            # decides the cache, which is the behaviour under test.
+            command = [str(executable)]
+            cwd = executable.parent
         self.process = subprocess.Popen(
-            [sys.executable, str(REPO_ROOT / "apps" / "ai-worker" / "run_worker.py")],
+            command,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=env,
-            cwd=str(REPO_ROOT / "apps" / "ai-worker"),
+            cwd=str(cwd),
             text=True,
             encoding="utf-8",
         )
@@ -81,15 +105,38 @@ class Worker:
 
 
 def main() -> int:
-    legacy = Path(sys.argv[1]) if len(sys.argv) > 1 else None
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("legacy_cache", nargs="?", type=Path, default=None)
+    parser.add_argument(
+        "--worker",
+        type=Path,
+        default=None,
+        help="packaged ai-worker executable; defaults to the source checkout",
+    )
+    parser.add_argument(
+        "--no-pin",
+        action="store_true",
+        help=(
+            "start the Worker without ANIME_PIC_HF_CACHE so a packaged build has "
+            "to derive <package>\\data\\hf-cache from its own location"
+        ),
+    )
+    args = parser.parse_args()
+    legacy = args.legacy_cache
     app_cache = Path(tempfile.mkdtemp(prefix="anime-hf-cache-")) / "data" / "hf-cache"
-    worker = Worker(app_cache)
+    expected = app_cache / "hub"
+    if args.no_pin:
+        if args.worker is None:
+            parser.error("--no-pin only makes sense with --worker")
+        package_root = args.worker.resolve().parents[2]
+        expected = package_root / "data" / "hf-cache" / "hub"
+    worker = Worker(None if args.no_pin else app_cache, args.worker)
     try:
         report = worker.call("model.cache.status", {"entries": cache_entries()})
         assert not report.get("error"), report
         payload = report["payload"]
         print(f"cache_dir          = {payload['cache_dir']}")
-        assert Path(payload["cache_dir"]) == app_cache / "hub", payload["cache_dir"]
+        assert Path(payload["cache_dir"]) == expected, payload["cache_dir"]
         before = {entry["id"]: entry["status"] for entry in payload["entries"]}
         print(f"before adopt       = {before}")
 

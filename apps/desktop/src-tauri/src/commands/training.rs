@@ -145,21 +145,23 @@ pub async fn kohya_probe_environment(
         }
     };
     let python = paths.python.clone();
-    let probe = tauri::async_runtime::spawn_blocking(move || run_environment_probe(&python))
-        .await
-        .unwrap_or_else(|error| KohyaEnvironment {
-            executable: String::new(),
-            python_version: None,
-            torch_version: None,
-            cuda_version: None,
-            cuda_available: false,
-            device_name: None,
-            xformers_version: None,
-            bitsandbytes_version: None,
-            error: Some(format!("训练环境检查任务异常中止：{error}")),
-            exit_code: None,
-            stderr: String::new(),
-        });
+    let scratch = scratch_dir(&app);
+    let probe =
+        tauri::async_runtime::spawn_blocking(move || run_environment_probe(&python, &scratch))
+            .await
+            .unwrap_or_else(|error| KohyaEnvironment {
+                executable: String::new(),
+                python_version: None,
+                torch_version: None,
+                cuda_version: None,
+                cuda_available: false,
+                device_name: None,
+                xformers_version: None,
+                bitsandbytes_version: None,
+                error: Some(format!("训练环境检查任务异常中止：{error}")),
+                exit_code: None,
+                stderr: String::new(),
+            });
     success("kohya.probe", request_id, probe)
 }
 
@@ -209,11 +211,25 @@ fn probe_failure(
     }
 }
 
-fn run_environment_probe(python: &Path) -> KohyaEnvironment {
+/// Scratch folder for the probe log, inside the package when possible.
+///
+/// The application pins every runtime file to its own folder, so a probe log
+/// goes to `<package>\temp` instead of the machine-wide temporary directory.
+/// A read-only package directory falls back to the system folder so a probe
+/// never fails because of permissions.
+fn scratch_dir(app: &AppHandle) -> PathBuf {
+    let data_dir = PathBuf::from(&app.state::<AppState>().data_dir);
+    let dir = crate::portable::PortableLayout::from_data_dir(&data_dir).temp_dir();
+    match fs::create_dir_all(&dir) {
+        Ok(()) => dir,
+        Err(_) => std::env::temp_dir(),
+    }
+}
+
+fn run_environment_probe(python: &Path, scratch: &Path) -> KohyaEnvironment {
     // Output goes to a temp file so a chatty interpreter can never block on a
     // full pipe while we are waiting for the timeout.
-    let log_path =
-        std::env::temp_dir().join(format!("apm-kohya-probe-{}.log", uuid::Uuid::new_v4()));
+    let log_path = scratch.join(format!("kohya-probe-{}.log", uuid::Uuid::new_v4()));
     let file = match fs::File::create(&log_path) {
         Ok(file) => file,
         Err(error) => {

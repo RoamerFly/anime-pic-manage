@@ -90,6 +90,14 @@ impl PortableLayout {
     pub fn cuda_dir(&self) -> PathBuf {
         self.root.join("app").join("cuda")
     }
+
+    /// Scratch space for short-lived files such as probe logs.
+    ///
+    /// Even throwaway output belongs inside the package: that is what makes
+    /// deleting the folder a complete uninstall.
+    pub fn temp_dir(&self) -> PathBuf {
+        self.root.join("temp")
+    }
 }
 
 #[cfg(test)]
@@ -105,6 +113,7 @@ mod tests {
         assert!(layout.lora_dir().ends_with(r"output\loras"));
         assert!(layout.generated_dir().ends_with(r"output\generated"));
         assert!(layout.cuda_dir().ends_with(r"app\cuda"));
+        assert!(layout.temp_dir().ends_with("temp"));
     }
 
     #[test]

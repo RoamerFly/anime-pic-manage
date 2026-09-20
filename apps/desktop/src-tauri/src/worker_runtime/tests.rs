@@ -387,6 +387,26 @@ mod tests {
         configure_background_command(&mut command);
     }
 
+    /// The Worker's Hugging Face cache has to follow the package, because the
+    /// settings page reports this path and users copy the folder around.
+    #[test]
+    fn worker_cache_follows_the_application_data_folder() {
+        let mut manager = WorkerManager::new(None);
+        assert!(manager.hf_cache_dir().is_none());
+
+        manager.set_data_dir(Some(r"D:\Apps\AnimePicManage\data".to_string()));
+        assert_eq!(
+            manager.hf_cache_dir(),
+            Some(std::path::PathBuf::from(
+                r"D:\Apps\AnimePicManage\data\hf-cache"
+            ))
+        );
+
+        // An unset or blank folder must not silently become a relative path.
+        manager.set_data_dir(Some("   ".to_string()));
+        assert!(manager.hf_cache_dir().is_none());
+    }
+
     #[test]
     fn source_candidate_requires_verified_paths() {
         let root = std::env::temp_dir().join(format!(
