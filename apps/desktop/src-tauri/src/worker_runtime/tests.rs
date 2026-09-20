@@ -77,6 +77,56 @@ mod tests {
         }
     }
 
+    #[test]
+    fn installer_layout_uses_the_packaged_worker_without_the_fallback_env() {
+        // The NSIS installer ships `app\runtime\ai-worker.exe` and no `app\env`.
+        let root = std::env::temp_dir().join(format!("anime-install-{}", uuid::Uuid::new_v4()));
+        let app = root.join("app");
+        fs::create_dir_all(app.join("runtime")).unwrap();
+        fs::write(app.join("runtime").join(executable_name()), b"# worker").unwrap();
+
+        let spec = resolve_worker_candidate_for_mode(
+            Some(&root),
+            &root,
+            &root.join("models"),
+            WorkerRuntimeMode::EmbeddedEnv,
+        )
+        .expect("the default mode still finds the packaged worker");
+        match spec {
+            WorkerLaunchSpec::Executable { executable, .. } => {
+                assert!(executable.ends_with(executable_name()))
+            }
+            other => panic!("unexpected spec: {other:?}"),
+        }
+
+        // Models must land inside the application folder even before the folder
+        // exists: a fresh install downloads them on demand.
+        let models_root = resource_models_root(&root, Path::new("C:/build-machine/models"));
+        assert_eq!(models_root, root.join("models"));
+
+        // A packaged app never borrows the checkout it was compiled in.
+        let missing = resolve_worker_candidate_for_mode(
+            Some(&root.join("subdir")),
+            &root,
+            &root.join("models"),
+            WorkerRuntimeMode::EmbeddedEnv,
+        );
+        assert!(missing.is_err());
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn source_checkout_keeps_using_its_own_models_root() {
+        // Development runs have no `app\` folder next to the binary, so the
+        // configured checkout is still honoured.
+        let root = std::env::temp_dir().join(format!("anime-dev-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        let fallback = root.join("checkout-models");
+        assert_eq!(resource_models_root(&root, &fallback), fallback);
+        fs::remove_dir_all(root).unwrap();
+    }
+
     fn python_name() -> &'static str {
         if cfg!(windows) {
             "python.exe"

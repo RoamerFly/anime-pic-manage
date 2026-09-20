@@ -69,8 +69,21 @@ pub fn resolve_worker_candidate_for_mode(
                 if let Some(spec) = resource_env_worker_spec(resource_dir, local_models_root) {
                     return Ok(spec);
                 }
+                // The standard installer ships the packaged Worker without the
+                // optional fallback ENV, so the EXE has to be considered before
+                // giving up on the application folder.
+                if let Some(spec) = executable_worker_spec(resource_dir, local_models_root) {
+                    return Ok(spec);
+                }
                 if let Some(spec) = resource_source_worker_spec(resource_dir, local_models_root) {
                     return Ok(spec);
+                }
+                // A packaged application must never fall back to the developer
+                // checkout the binary was compiled in: that path belongs to the
+                // build machine and writing there would leave the application
+                // folder silently incomplete.
+                if is_packaged_layout(resource_dir) {
+                    return Err(WorkerRuntimeError::NotFound);
                 }
             }
             let project_dir =
@@ -208,7 +221,18 @@ pub fn resource_models_root(resource_dir: &Path, fallback: &Path) -> PathBuf {
             return candidate;
         }
     }
+    // A packaged layout keeps its models next to the program even when the
+    // folder does not exist yet: a fresh install downloads them on demand from
+    // 设置 → 模型配置, and they must land inside the application folder.
+    if is_packaged_layout(resource_dir) {
+        return resource_dir.join("models");
+    }
     fallback.to_path_buf()
+}
+
+/// True when `resource_dir` is a released package (`app\` next to the program).
+pub fn is_packaged_layout(resource_dir: &Path) -> bool {
+    resource_dir.join("app").is_dir()
 }
 
 pub fn resource_roots(resource_dir: &Path) -> Vec<PathBuf> {

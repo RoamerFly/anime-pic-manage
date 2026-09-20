@@ -1,12 +1,32 @@
-name: Release (signed Tauri bundle)
+name: Release (Windows installer + portable)
+
+# 触发方式：
+#   * 推送 v*.*.* 标签：构建并发布该版本
+#   * 手动运行：可指定版本、是否包含 GPU 包、是否真的创建 Release（默认只做构建干跑）
+#
+# 产物：
+#   * AnimePicManage-<版本>-windows-x64-setup.exe     标准 Windows 安装器（NSIS，含卸载选项）
+#   * AnimePicManage-<版本>-windows-x64-portable.zip  便携包（程序 + 运行时，不含模型）
+#   * AnimePicManage-<版本>-windows-x64-models.zip    可选模型包（解压进便携包目录即可）
+#   * latest.json                                     应用内“检查更新”使用的清单
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version, for example 0.1.0'
-        required: true
+        description: '版本号，例如 0.2.0（留空则用 tauri.conf.json 里的版本）'
+        required: false
         type: string
+      include_gpu:
+        description: '是否额外构建 GPU 版安装器与便携包（耗时更长）'
+        required: false
+        type: boolean
+        default: false
+      publish:
+        description: '是否创建 GitHub Release（关闭则只做构建干跑并上传 Artifact）'
+        required: false
+        type: boolean
+        default: false
   push:
     tags: ['v*.*.*']
 
@@ -18,75 +38,183 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
+  windows:
+    name: Windows installer and portable packages
     runs-on: windows-latest
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Require signing secret without exposing it
+      - name: Resolve version and publish flag
+        id: meta
         shell: pwsh
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $version = '${{ github.event.inputs.version }}'
+          if ([string]::IsNullOrWhiteSpace($version) -and $env:GITHUB_REF -like 'refs/tags/v*') {
+            $version = $env:GITHUB_REF -replace '^refs/tags/v', ''
+          }
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            $version = (Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+') {
+            throw "版本号不合法: $version"
+          }
+          $publish = ('${{ github.event_name }}' -eq 'push') -or ('${{ github.event.inputs.publish }}' -eq 'true')
+          $includeGpu = ('${{ github.event.inputs.include_gpu }}' -eq 'true')
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+          "publish=$($publish.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          "include_gpu=$($includeGpu.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          Write-Output "version=$version publish=$publish gpu=$includeGpu"
+
+      - name: Require the updater signing secret
+        shell: pwsh
         run: |
           if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
-            throw 'TAURI_SIGNING_PRIVATE_KEY is not configured. Configure it as a repository Actions secret before releasing.'
+            throw '缺少 TAURI_SIGNING_PRIVATE_KEY：先在仓库 Secrets 里配置更新签名私钥，再发布。'
           }
-          Write-Output 'Signing secret is present; its value is intentionally not printed.'
+          Write-Output '签名私钥已配置（值不会被打印）。'
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Enable pnpm and install dependencies
-        shell: pwsh
-        run: |
-          if (-not (Test-Path package.json)) {
-            Write-Output 'Root package.json is not present yet; no release build is available.'
-            exit 0
-          }
-          corepack enable
-          if (Test-Path pnpm-lock.yaml) {
-            pnpm install --frozen-lockfile
-          } else {
-            pnpm install
-          }
-
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build signed bundle (when Tauri app is present)
-        if: ${{ hashFiles('apps/desktop/src-tauri/tauri.conf.json') != '' }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Enable pnpm and install dependencies
+        shell: pwsh
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: Check the workspace
+        shell: pwsh
+        run: |
+          pnpm lint
+          pnpm test
+
+      - name: Stamp the release version
+        shell: pwsh
+        run: |
+          $version = '${{ steps.meta.outputs.version }}'
+          $confPath = 'apps/desktop/src-tauri/tauri.conf.json'
+          $conf = Get-Content $confPath -Raw
+          $conf = [regex]::Replace($conf, '("version"\s*:\s*")[^"]+(")', "`${1}$version`${2}", 1)
+          Set-Content -Path $confPath -Value $conf -Encoding utf8 -NoNewline
+
+          foreach ($toml in @('apps/desktop/src-tauri/Cargo.toml')) {
+            $text = Get-Content $toml -Raw
+            $text = [regex]::Replace($text, '(?m)^(version\s*=\s*")[^"]+(")', "`${1}$version`${2}", 1)
+            Set-Content -Path $toml -Value $text -Encoding utf8 -NoNewline
+          }
+
+          foreach ($pkg in @('package.json', 'apps/desktop/package.json', 'apps/ai-worker/pyproject.toml')) {
+            if (-not (Test-Path $pkg)) { continue }
+            $text = Get-Content $pkg -Raw
+            $text = [regex]::Replace($text, '(?m)^(version\s*=\s*")[^"]+(")', "`${1}$version`${2}", 1)
+            $text = [regex]::Replace($text, '("version"\s*:\s*")[^"]+(")', "`${1}$version`${2}", 1)
+            Set-Content -Path $pkg -Value $text -Encoding utf8 -NoNewline
+          }
+          Write-Output "stamped version $version"
+
+      - name: Build the CPU portable package
+        shell: pwsh
+        run: |
+          ./scripts/package_windows.ps1 -ProjectRoot . -DistName dist_windows
+
+      - name: Build the CPU installer
+        shell: pwsh
+        run: |
+          ./scripts/package_installer_windows.ps1 -ProjectRoot . -DistName dist_windows
+
+      - name: Build the GPU portable package and installer
+        if: ${{ steps.meta.outputs.include_gpu == 'true' }}
+        shell: pwsh
+        run: |
+          ./scripts/package_windows.ps1 -ProjectRoot . -DistName dist_windows_gpu -Cuda
+          ./scripts/package_installer_windows.ps1 -ProjectRoot . -DistName dist_windows_gpu -Cuda
+
+      - name: Collect the release assets
+        shell: pwsh
+        run: |
+          $version = '${{ steps.meta.outputs.version }}'
+          $assets = Join-Path $PWD 'release-assets'
+          New-Item -ItemType Directory -Path $assets -Force | Out-Null
+
+          $installer = Get-ChildItem 'dist_windows/installer/*-setup.exe' | Select-Object -First 1
+          Copy-Item $installer.FullName (Join-Path $assets "AnimePicManage-$version-windows-x64-setup.exe")
+
+          # 便携包拆成“程序 + 可选模型包”，避免单个压缩包超过 GitHub 2GB 的资产上限。
+          $launcher = ([char]0x542F) + ([char]0x52A8) + '.bat'
+          $guide = ([char]0x4F7F) + ([char]0x7528) + ([char]0x8BF4) + ([char]0x660E) + '.txt'
+          $portablePaths = @(
+            'dist_windows/app',
+            'dist_windows/resources',
+            'dist_windows/anime-pic-manage.exe',
+            (Join-Path 'dist_windows' $launcher),
+            (Join-Path 'dist_windows' $guide)
+          )
+          Compress-Archive -Path $portablePaths `
+            -DestinationPath (Join-Path $assets "AnimePicManage-$version-windows-x64-portable.zip") -CompressionLevel Optimal
+          Compress-Archive -Path 'dist_windows/models' `
+            -DestinationPath (Join-Path $assets "AnimePicManage-$version-windows-x64-models.zip") -CompressionLevel Optimal
+
+          if ('${{ steps.meta.outputs.include_gpu }}' -eq 'true') {
+            $gpuInstaller = Get-ChildItem 'dist_windows_gpu/installer/*-setup.exe' | Select-Object -First 1
+            Copy-Item $gpuInstaller.FullName (Join-Path $assets "AnimePicManage-$version-windows-x64-gpu-setup.exe")
+            Compress-Archive -Path 'dist_windows_gpu/app', 'dist_windows_gpu/resources', 'dist_windows_gpu/anime-pic-manage.exe' `
+              -DestinationPath (Join-Path $assets "AnimePicManage-$version-windows-x64-gpu-portable.zip") -CompressionLevel Optimal
+          }
+
+          # 应用内“检查更新”读取这个清单；签名文件由 Tauri 随安装器一起产出。
+          $signature = Get-ChildItem 'apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sig' | Select-Object -First 1
+          $downloadUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/${{ steps.meta.outputs.tag }}/AnimePicManage-$version-windows-x64-setup.exe"
+          $manifest = [ordered]@{
+            version = $version
+            notes = '见 Release 说明'
+            pub_date = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+            platforms = @{ 'windows-x86_64' = @{ signature = (Get-Content $signature.FullName -Raw).Trim(); url = $downloadUrl } }
+          }
+          $manifest | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $assets 'latest.json') -Encoding utf8
+
+          Get-ChildItem $assets | ForEach-Object { Write-Output ("{0}  {1:N1} MB" -f $_.Name, ($_.Length / 1MB)) }
+
+      - name: Publish the GitHub Release
+        if: ${{ steps.meta.outputs.publish == 'true' }}
         shell: pwsh
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
-          TAURI_UPDATE_ENDPOINT: ${{ vars.TAURI_UPDATE_ENDPOINT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if (-not (Test-Path package.json)) {
-            throw 'Root package.json is required for a Tauri release build.'
-          }
-          if ([string]::IsNullOrWhiteSpace($env:TAURI_UPDATER_PUBLIC_KEY) -or [string]::IsNullOrWhiteSpace($env:TAURI_UPDATE_ENDPOINT)) {
-            throw 'TAURI_UPDATER_PUBLIC_KEY and TAURI_UPDATE_ENDPOINT repository variables must be configured with real values before a signed release.'
-          }
-          $configPath = 'apps/desktop/src-tauri/tauri.conf.json'
-          $config = Get-Content $configPath -Raw | ConvertFrom-Json
-          $configuredKey = [string]$config.plugins.updater.pubkey
-          $configuredEndpoints = @($config.plugins.updater.endpoints)
-          if ([string]::IsNullOrWhiteSpace($configuredKey) -or $configuredKey -match 'REPLACE_WITH|<.*>') {
-            throw 'Tauri updater public key is still a placeholder in tauri.conf.json.'
-          }
-          if ($configuredKey -ne $env:TAURI_UPDATER_PUBLIC_KEY) {
-            throw 'Tauri updater public key does not match TAURI_UPDATER_PUBLIC_KEY.'
-          }
-          if ($configuredEndpoints.Count -ne 1 -or $configuredEndpoints[0] -ne $env:TAURI_UPDATE_ENDPOINT -or $configuredEndpoints[0] -notmatch '^https://') {
-            throw 'Tauri updater endpoint must be one configured HTTPS endpoint matching TAURI_UPDATE_ENDPOINT.'
-          }
-          pnpm --filter @anime-pic-manage/desktop tauri build
+          $tag = '${{ steps.meta.outputs.tag }}'
+          $notes = @'
+          ## 新版本内容
 
-      - name: Explain skipped build
-        if: ${{ hashFiles('apps/desktop/src-tauri/tauri.conf.json') == '' }}
-        run: Write-Output 'Tauri configuration is not present yet; no release artifact was produced.'
+          - 发布标准 Windows 安装器与便携包。
+          - 安装器会自动沿用上次的安装目录；卸载时可选择是否删除缓存、模型与训练产物。
+          - 便携包拆分为“程序包 + 可选模型包”，解压到同一目录即可离线使用。
+
+          ## 下载建议
+
+          - 只想装完就用：下载 `*-setup.exe`，模型可在“设置 → 模型配置”里按需下载。
+          - 需要整包带走：下载 `*-portable.zip` 与 `*-models.zip`，解压到同一文件夹。
+          '@
+          if (-not (gh release view $tag 2>$null)) {
+            gh release create $tag --title $tag --notes $notes
+          }
+          gh release upload $tag release-assets/* --clobber
+
+      - name: Keep the assets for a dry run
+        if: ${{ steps.meta.outputs.publish != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ steps.meta.outputs.version }}
+          path: release-assets/*
+          retention-days: 7

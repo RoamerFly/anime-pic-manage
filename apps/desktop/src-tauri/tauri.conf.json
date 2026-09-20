@@ -31,9 +31,24 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
+    "publisher": "RoamerFly",
+    "homepage": "https://github.com/RoamerFly/anime-pic-manage",
+    "shortDescription": "本地动漫图片角色识别、相似度去重与 LoRA 训练工具",
+    "longDescription": "在本地识别动漫图片里的角色、人工矫正、去除重复图、导出训练集并训练 LoRA，可选联动 ComfyUI 生图。",
+    "licenseFile": "../../../LICENSE",
     "icon": ["icons/icon.ico"],
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": true,
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["SimpChinese", "English"],
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "installer/hooks.nsh",
+        "compression": "lzma",
+        "startMenuFolder": "Anime Pic Manage"
+      }
+    }
   },
   "plugins": {
     "updater": {

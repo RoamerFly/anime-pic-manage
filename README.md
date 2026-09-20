@@ -29,6 +29,29 @@ AnimePicManage\
 
 **所有运行数据都只写在软件目录内**：数据库与缓存落在 `data\`、识别模型落在 `models\`、产物落在 `output\`、临时文件落在 `temp\`，不写用户目录、`AppData` 或系统临时目录。整个文件夹拷到别的机器上就能直接跑，卸载只需删文件夹。
 
+### 用安装版（标准 Windows 安装器）
+
+不想用绿色包就直接装：
+
+1. 双击 `AnimePicManage-<版本>-windows-x64-setup.exe`。这是 **NSIS 标准安装器**（不是自解压脚本），装卸行为与常见 Windows 软件一致，能明显减少安全软件误报。
+2. 首次安装会问语言（简体中文 / English），默认装到 `%LOCALAPPDATA%\Anime Pic Manage`——当前用户安装，不需要管理员权限，安装目录可写。
+3. **之前装过就会自动沿用原安装目录**（安装器把路径写进 `HKCU\Software\RoamerFly\Anime Pic Manage`，重装时读回），不用每次重新选。
+4. 安装后的目录结构与便携包一致：`anime-pic-manage.exe` + `app\`（推理运行时）+ `resources\` + `data\` / `models\` / `output\` / `temp\`。
+
+安装版**不自带模型**（模型合计约 1.1GB，塞进安装包会超出发布平台的单文件上限）：装完打开「设置 → 模型配置」点下载即可；如果本机别处已经有这些模型，面板会显示「复制到软件目录」，一键搬进来，不用重新下载。
+
+**卸载**：从 Windows 的「设置 → 应用」卸载，或运行安装目录里的 `uninstall.exe`。卸载向导第一步就是清理范围：
+
+| 选项 | 默认 | 说明 |
+| --- | --- | --- |
+| 模型缓存 `data\hf-cache` | 勾选 | 打标模型、参考匹配模型与相关缓存，约 700MB，可重新下载 |
+| 识别模型 `models\` | 勾选 | 角色识别与头部检测模型，约 1.1GB，可重新下载 |
+| 训练与出图产物 `output\` | **不勾选** | LoRA、训练集、生成图，删掉无法恢复 |
+
+程序本体、`app\`（含一键下载的 CUDA 运行库）与 `resources\` 一定会被删除；数据库、人工矫正结果与设置都在 `data\` 内，取消勾选的项目会原样保留，重新安装后直接继续用。
+
+静默卸载 `uninstall.exe /S` 默认**只删程序、不碰用户数据**；确实要清理时显式传参：`uninstall.exe /S /DELCACHE /DELMODELS /DELOUTPUT`。
+
 ### 从源码运行
 
 ```powershell
@@ -204,7 +227,7 @@ caption 采用社区写法：质量前缀 + 触发词 + Danbooru 标签，逗号
 | 启动 ComfyUI 报未配置目录 | 设置 → 生图配置重新选目录并**保存**；确认目录里同时有 `ComfyUI\main.py` 与 `python\python.exe` |
 | 停止按钮点了没反应/变灰 | 现在只要 ComfyUI 在运行就能停；手动启动的实例会按端口找到 Python 进程后结束，其他程序占用端口时会拒绝并提示 |
 | 工作流报节点缺失 | 该模板用了未安装的自定义节点（ControlNet、IPAdapter 等），在 ComfyUI 里装好对应插件后重试 |
-| 首次导出训练集很慢 | 正在下载约 470MB 的 WD14 打标模型，之后走缓存 |
+| 首次导出训练集很慢 | 正在下载约 446MB 的 WD14 打标模型，之后走缓存 |
 | 换机器后要重新下模型 | 模型缓存在 `data\hf-cache\`，整包拷走即可；只拷程序不拷 `data\` 就会重新下载 |
 | 识别全是「未识别」 | 多数是模型标签表里没有这个角色，见上文参考图识别 / 个人模型 |
 
@@ -218,6 +241,8 @@ uv run --project apps/ai-worker --extra model --extra detector --extra dev pytho
 build.bat              # CPU 便携包 -> dist_windows
 build_gpu.bat          # CUDA 便携包 -> dist_windows_gpu（全量，含 CUDA 版 ONNX Runtime）
 build_gpu_fast.bat     # 复用 GPU 环境，只重建程序与 Worker（改界面/逻辑时用这个）
+build_installer.bat        # 标准 Windows 安装器 -> dist_windows\installer（需先有便携包）
+build_installer.bat --gpu  # GPU 版安装器（读 dist_windows_gpu）
 ```
 
 打包脚本会保留已有的 `data\` 与 `output\`，并对内置推理引擎与兼容环境分别执行健康与能力探针。
