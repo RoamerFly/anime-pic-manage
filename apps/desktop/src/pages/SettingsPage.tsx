@@ -1071,7 +1071,10 @@ function ComfySettingsPanel({
       <div className="settings-field settings-field-stacked">
         <div>
           <strong>生成图输出目录</strong>
-          <small>留空则使用 <code>&lt;ComfyUI 根目录&gt;\Images\generated</code>。</small>
+          <small>
+            留空则使用 <code>&lt;ComfyUI 根目录&gt;\Images\generated-manage</code>
+            （带 <code>-manage</code> 后缀，便于和你在 ComfyUI 网页端自己出的图区分）。
+          </small>
         </div>
         <div className="generation-inline">
           <input

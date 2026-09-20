@@ -5,7 +5,7 @@ use crate::ipc::{core_error, failure, normalize_request_id, success, IpcEnvelope
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 
@@ -82,6 +82,9 @@ pub struct LoraExportCandidates {
 }
 
 pub(crate) fn default_dataset_dir(app: &AppHandle, settings: &AppSettings) -> String {
+    // Products stay next to ComfyUI (that is where kohya and the user already
+    // work), but with a `-manage` suffix so the app's exports never mix with
+    // hand-made datasets.
     if !settings.comfy_root.trim().is_empty() {
         if let Ok(paths) = crate::comfy::resolve_paths(
             &settings.comfy_root,
@@ -90,16 +93,37 @@ pub(crate) fn default_dataset_dir(app: &AppHandle, settings: &AppSettings) -> St
         ) {
             let root = PathBuf::from(&paths.root);
             if let Some(parent) = root.parent() {
-                return parent.join("lora-datasets").to_string_lossy().into_owned();
+                return parent
+                    .join(MANAGED_DATASET_DIR)
+                    .to_string_lossy()
+                    .into_owned();
             }
         }
     }
-    // A released portable package keeps exports inside its own `output\datasets`.
+    // Without ComfyUI everything falls back to the app's own `output\datasets`.
     let data_dir = PathBuf::from(&app.state::<AppState>().data_dir);
     crate::portable::PortableLayout::from_data_dir(&data_dir)
         .dataset_dir()
         .to_string_lossy()
         .into_owned()
+}
+
+/// Folder the app exports training sets into, next to ComfyUI.
+pub(crate) const MANAGED_DATASET_DIR: &str = "lora-datasets-manage";
+/// Folder the app writes trained LoRA files into, next to ComfyUI.
+pub(crate) const MANAGED_LORA_DIR: &str = "lora-models-manage";
+
+/// Sibling directory for trained LoRA files.
+///
+/// `lora-datasets-manage` -> `lora-models-manage`, keeping whatever suffix the
+/// caller configured; anything else falls back to the package's `output\loras`.
+pub(crate) fn lora_dir_for(dataset_dir: &Path) -> Option<PathBuf> {
+    let name = dataset_dir.file_name()?.to_string_lossy();
+    if !name.starts_with("lora-datasets") {
+        return None;
+    }
+    let lora_name = name.replacen("lora-datasets", "lora-models", 1);
+    Some(dataset_dir.parent()?.join(lora_name))
 }
 
 fn load_settings(app: &AppHandle) -> Result<AppSettings, String> {
@@ -348,5 +372,29 @@ pub async fn export_lora_dataset(
                 true,
             ),
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn app_products_are_namespaced_next_to_comfyui() {
+        assert_eq!(MANAGED_DATASET_DIR, "lora-datasets-manage");
+        assert_eq!(MANAGED_LORA_DIR, "lora-models-manage");
+    }
+
+    #[test]
+    fn trained_loras_land_in_the_sibling_of_the_managed_datasets() {
+        let datasets = PathBuf::from(r"E:\comfy\lora-datasets-manage");
+
+        assert_eq!(
+            lora_dir_for(&datasets),
+            Some(PathBuf::from(r"E:\comfy\lora-models-manage"))
+        );
+        // The package fallback (`…\output\datasets`) has no sibling naming rule,
+        // so callers keep using `output\loras`.
+        assert_eq!(lora_dir_for(Path::new(r"D:\app\output\datasets")), None);
     }
 }

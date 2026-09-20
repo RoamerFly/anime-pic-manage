@@ -163,7 +163,9 @@ pub fn resolve_paths(
     }
     let models_dir = app_dir.join("models");
     let output_dir = if output_override.trim().is_empty() {
-        root_dir.join("Images").join("generated")
+        // `-manage` keeps app-generated images separate from whatever the user
+        // produced by hand in the ComfyUI web UI.
+        root_dir.join("Images").join("generated-manage")
     } else {
         PathBuf::from(output_override.trim())
     };
@@ -246,7 +248,7 @@ mod tests {
         assert!(paths.python.ends_with("python.exe"));
         assert!(paths.models_dir.ends_with("models"));
         assert!(paths.loras_dir.ends_with("loras"));
-        assert!(paths.output_dir.ends_with("generated"));
+        assert!(paths.output_dir.ends_with("generated-manage"));
         assert_eq!(
             read_version(Path::new(&paths.app_dir)).as_deref(),
             Some("0.9.2")

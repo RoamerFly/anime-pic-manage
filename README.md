@@ -165,7 +165,15 @@ caption 采用社区写法：质量前缀 + 触发词 + Danbooru 标签，逗号
 
 「AI 生图 → 训练集导出」选角色 → 导出。建议：裁剪方式 `person`、分辨率与底模匹配（SD1.5 用 512，SDXL 用 1024）、质量前缀按底模选（Pony 系列用 `score_9,score_8_up,score_7_up`）、触发词用角色名（如 `kushina_uzumaki`）。
 
-产出：`output\datasets\<角色>\NNN.png + NNN.txt` 与 `dataset.toml`；页面会显示 caption 抽样，打标质量不理想就调阈值或改 `remove_tags` 再导一次。
+产物位置（应用产出的文件夹名统一带 `-manage` 后缀，便于和你在 ComfyUI/kohya 里手工做的区分）：
+
+| 配置了 ComfyUI | 没配置 ComfyUI（回退到包内） |
+| --- | --- |
+| 训练集 → `<ComfyUI 上一级>\lora-datasets-manage\<角色>\` | `output\datasets\<角色>\` |
+| LoRA → `<ComfyUI 上一级>\lora-models-manage\` | `output\loras\` |
+| 出图 → `<ComfyUI 根>\Images\generated-manage\` | `output\generated\` |
+
+导出内容为 `<角色>\NNN.png + NNN.txt` 与 `dataset.toml`；页面会显示 caption 抽样，打标质量不理想就调阈值或改 `remove_tags` 再导一次。
 
 ### 第 4 步：训练 LoRA
 

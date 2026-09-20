@@ -57,22 +57,16 @@ fn load_settings(app: &AppHandle) -> Result<AppSettings, String> {
 /// LoRA weights land next to the exported datasets by default.
 fn default_training_output_dir(app: &AppHandle, settings: &AppSettings) -> String {
     let dataset_dir = PathBuf::from(default_dataset_dir(app, settings));
-    let parent = dataset_dir
-        .parent()
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| dataset_dir.clone());
-    // Portable packages own `<root>\output\datasets`, so the LoRA files belong
-    // in the sibling `loras` folder instead of a second naming scheme.
-    let folder = if dataset_dir
-        .file_name()
-        .map(|name| name == "datasets")
-        .unwrap_or(false)
-    {
-        "loras"
-    } else {
-        "lora-models"
-    };
-    parent.join(folder).to_string_lossy().into_owned()
+    if let Some(sibling) = crate::commands::dataset::lora_dir_for(&dataset_dir) {
+        return sibling.to_string_lossy().into_owned();
+    }
+    // The datasets live in the package's own `output\datasets`, so the LoRA
+    // files belong in the sibling `output\loras`.
+    let data_dir = PathBuf::from(&app.state::<AppState>().data_dir);
+    crate::portable::PortableLayout::from_data_dir(&data_dir)
+        .lora_dir()
+        .to_string_lossy()
+        .into_owned()
 }
 
 fn status_payload(app: &AppHandle, settings: &AppSettings) -> KohyaStatusPayload {
