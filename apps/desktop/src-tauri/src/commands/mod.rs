@@ -11,6 +11,7 @@ pub mod similarity;
 pub mod system;
 pub mod training;
 pub mod updater;
+pub mod workflow_graph;
 
 pub use annotations::*;
 pub use app_settings::*;
@@ -25,3 +26,4 @@ pub use similarity::*;
 pub use system::*;
 pub use training::*;
 pub use updater::*;
+pub use workflow_graph::*;

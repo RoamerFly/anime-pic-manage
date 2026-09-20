@@ -98,6 +98,10 @@ pub struct ComfyGenerateRequest {
     /// `-1` asks ComfyUI to pick a random seed.
     #[serde(default = "default_seed")]
     pub seed: i64,
+    /// Per-node input overrides from the workflow graph editor, applied after
+    /// the named bindings so an explicit node edit always wins.
+    #[serde(default)]
+    pub node_overrides: Option<serde_json::Value>,
     #[serde(default)]
     pub filename_prefix: Option<String>,
 }

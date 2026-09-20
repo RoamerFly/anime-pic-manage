@@ -125,6 +125,8 @@ pub fn run() {
             comfy_generate,
             comfy_cancel,
             comfy_open_output,
+            comfy_template_detail,
+            comfy_save_template_overrides,
             get_lora_export_candidates,
             export_lora_dataset,
             kohya_status,

@@ -27,6 +27,7 @@ import type {
 } from "@anime-pic-manage/shared-types";
 import { invokeCore, isTauriRuntime, normalizePreviewPath } from "../lib/tauri";
 import { TrainingPanel } from "../components/TrainingPanel";
+import { WorkflowGraph, type NodeOverrides } from "../components/WorkflowGraph";
 
 /** Prompt presets matched to the checkpoint families used by the library. */
 const QUALITY_PRESETS: Array<{
@@ -101,6 +102,8 @@ export function GenerationPage() {
   const [trainOutputName, setTrainOutputName] = useState("");
 
   const [template, setTemplate] = useState("txt2img");
+  const [templateDetail, setTemplateDetail] = useState<unknown>(null);
+  const [nodeOverrides, setNodeOverrides] = useState<NodeOverrides>({});
   const [checkpoint, setCheckpoint] = useState("");
   const [lora, setLora] = useState("");
   const [loraStrength, setLoraStrength] = useState(0.8);
@@ -183,6 +186,48 @@ export function GenerationPage() {
   useEffect(() => {
     if (status?.running) void refreshModels();
   }, [refreshModels, status?.running]);
+
+  // Load the selected template's raw graph plus its saved node overrides.
+  useEffect(() => {
+    if (!isTauriRuntime() || !template) return;
+    let active = true;
+    void (async () => {
+      const response = await invokeCore<{
+        template: unknown;
+        overrides: NodeOverrides;
+      }>("comfy_template_detail", "comfy.template.detail", { name: template });
+      if (!active || !response.payload) return;
+      setTemplateDetail(response.payload.template);
+      setNodeOverrides(response.payload.overrides ?? {});
+    })();
+    return () => {
+      active = false;
+    };
+  }, [template]);
+
+  const saveOverrides = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const updateNodeOverride = useCallback(
+    (nodeId: string, input: string, value: unknown) => {
+      setNodeOverrides((current) => {
+        const next: NodeOverrides = { ...current };
+        const node = { ...(next[nodeId] ?? {}) };
+        if (value === undefined) delete node[input];
+        else node[input] = value;
+        if (Object.keys(node).length === 0) delete next[nodeId];
+        else next[nodeId] = node;
+        // Persist with a small debounce so typing a prompt is one write.
+        if (saveOverrides.current) clearTimeout(saveOverrides.current);
+        saveOverrides.current = setTimeout(() => {
+          void invokeCore("comfy_save_template_overrides", "comfy.template.overrides", {
+            name: template,
+            overrides: next,
+          });
+        }, 600);
+        return next;
+      });
+    },
+    [template],
+  );
 
   const pickDatasetDir = async () => {
     const selected = await open({
@@ -278,6 +323,8 @@ export function GenerationPage() {
         batch,
         seed,
         filename_prefix: "anime-pic-manage",
+        node_overrides:
+          Object.keys(nodeOverrides).length > 0 ? nodeOverrides : undefined,
       };
       const response = await invokeCore<ComfyGenerateResult>(
         "comfy_generate",
@@ -707,6 +754,21 @@ export function GenerationPage() {
           </div>
         </section>
       )}
+
+      <section className="panel-card generation-workflow">
+        <div className="generation-results-heading">
+          <strong>工作流（{template}）</strong>
+          <small>
+            按数据流展示所选模板的节点与连线；可以直接改节点里的文本、数字与开关，
+            改动作为本机覆盖值保存，生成时优先于上面的快捷参数。
+          </small>
+        </div>
+        <WorkflowGraph
+          template={templateDetail}
+          overrides={nodeOverrides}
+          onChange={updateNodeOverride}
+        />
+      </section>
 
       <section className="panel-card generation-dataset">
         <div className="generation-results-heading">

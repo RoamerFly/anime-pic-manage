@@ -64,6 +64,8 @@ export type MessageType =
   | "reference.status"
   | "reference.build"
   | "reference.clear"
+  | "comfy.template.detail"
+  | "comfy.template.overrides"
   | "model.list"
   | "model.install"
   | "model.activate"
@@ -189,6 +191,8 @@ export interface ComfyGenerateRequest {
   height?: number;
   batch?: number;
   seed?: number;
+  /** Per-node input overrides from the workflow graph editor. */
+  node_overrides?: Record<string, Record<string, unknown>> | null;
   filename_prefix?: string | null;
 }
 

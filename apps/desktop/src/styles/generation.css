@@ -175,6 +175,148 @@
   padding: 16px 18px;
 }
 
+.workflow-graph {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.workflow-graph-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.workflow-graph-zoom {
+  min-width: 38px;
+  text-align: center;
+  font-size: calc(11 * var(--ui-font-step, 1px));
+  color: #6c7789;
+}
+
+.workflow-graph-canvas {
+  max-height: 460px;
+  overflow: auto;
+  border: 1px solid #e8ebf4;
+  border-radius: 10px;
+  background:
+    radial-gradient(circle, #e3e7f2 1px, transparent 1px) 0 0 / 18px 18px,
+    #fbfcff;
+}
+
+.workflow-graph-stage {
+  position: relative;
+}
+
+.workflow-graph-edges {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.workflow-node {
+  position: absolute;
+  border: 1px solid #d5dbea;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgb(23 33 61 / 8%);
+  padding: 6px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workflow-node.edited {
+  border-color: #6f8cff;
+  box-shadow: 0 0 0 2px rgb(111 140 255 / 18%);
+}
+
+.workflow-node-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid #eef1f8;
+}
+
+.workflow-node-header strong {
+  font-size: calc(11.5 * var(--ui-font-step, 1px));
+  color: #2f3a52;
+  overflow-wrap: anywhere;
+}
+
+.workflow-node-header code {
+  font-size: calc(10 * var(--ui-font-step, 1px));
+  color: #9aa4b6;
+}
+
+.workflow-node-input,
+.workflow-node-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: calc(10.5 * var(--ui-font-step, 1px));
+  color: #58637a;
+}
+
+.workflow-node-input {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.workflow-node-input > span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #7c879b;
+}
+
+.workflow-node-input.edited > span {
+  color: #4d68d8;
+  font-weight: 600;
+}
+
+.workflow-node-input input[type="text"],
+.workflow-node-input input[type="number"],
+.workflow-node-input textarea {
+  width: 100%;
+  padding: 3px 6px;
+  border: 1px solid #dfe4f0;
+  border-radius: 6px;
+  font-size: calc(11 * var(--ui-font-step, 1px));
+  font-family: inherit;
+  resize: vertical;
+}
+
+.workflow-node-input input[type="checkbox"] {
+  align-self: flex-start;
+}
+
+.workflow-node-reset {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #8a94a8;
+  cursor: pointer;
+}
+
+.workflow-node-reset:hover {
+  color: #4d68d8;
+}
+
+.workflow-node-link {
+  justify-content: space-between;
+}
+
+.workflow-node-link code {
+  color: #9aa4b6;
+}
+
 .generation-caption-preview {
   display: flex;
   flex-direction: column;

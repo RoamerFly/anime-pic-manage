@@ -32,6 +32,48 @@ pub fn resolved_seed(seed: i64) -> i64 {
     (uuid::Uuid::new_v4().as_u128() % 2_147_483_647) as i64
 }
 
+/// Apply `{node_id: {input: value}}` overrides onto a built prompt.
+///
+/// Only existing scalar inputs are touched: link references (`[node, index]`)
+/// and unknown nodes are ignored so a stale override can never corrupt a
+/// workflow. Returns how many values were applied.
+pub fn apply_node_overrides(prompt: &mut Value, overrides: &Value) -> usize {
+    let Some(overrides) = overrides.as_object() else {
+        return 0;
+    };
+    let Some(nodes) = prompt.as_object_mut() else {
+        return 0;
+    };
+    let mut applied = 0;
+    for (node_id, inputs) in overrides {
+        let Some(inputs) = inputs.as_object() else {
+            continue;
+        };
+        let Some(node) = nodes.get_mut(node_id).and_then(Value::as_object_mut) else {
+            continue;
+        };
+        let Some(target) = node.get_mut("inputs").and_then(Value::as_object_mut) else {
+            continue;
+        };
+        for (name, value) in inputs {
+            let Some(current) = target.get(name) else {
+                continue;
+            };
+            // A link is an array of [node_id, output_index]; replacing it would
+            // silently rewire the graph.
+            if current.is_array() {
+                continue;
+            }
+            if current == value {
+                continue;
+            }
+            target.insert(name.clone(), value.clone());
+            applied += 1;
+        }
+    }
+    applied
+}
+
 pub const TEMPLATE_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -190,9 +232,13 @@ impl WorkflowTemplate {
             ));
         }
 
-        let prompt = Value::Object(template.prompt);
+        let mut prompt = Value::Object(template.prompt);
         if prompt.as_object().map(Map::is_empty).unwrap_or(true) {
             return Err(ComfyError::Template("模板缺少 prompt 节点图".to_string()));
+        }
+        // Graph-editor edits win over the named bindings above.
+        if let Some(overrides) = request.node_overrides.as_ref() {
+            apply_node_overrides(&mut prompt, overrides);
         }
         Ok(prompt)
     }
@@ -257,8 +303,30 @@ mod tests {
             height: 1024,
             batch: 2,
             seed: 12345,
+            node_overrides: None,
             filename_prefix: Some("anime".to_string()),
         }
+    }
+
+    #[test]
+    fn node_overrides_win_over_bindings_but_never_rewire_links() {
+        let request = ComfyGenerateRequest {
+            node_overrides: Some(json!({
+                // 6 is the positive CLIPTextEncode node in the test template.
+                "6": { "text": "edited in the graph view" },
+                // 3 is the KSampler; `model` is a link and must stay untouched.
+                "3": { "steps": 44, "model": ["99", 0] },
+                "nope": { "text": "ignored" },
+            })),
+            ..request()
+        };
+
+        let built = template().build_prompt(&request).expect("prompt builds");
+
+        assert_eq!(built["6"]["inputs"]["text"], "edited in the graph view");
+        assert_eq!(built["3"]["inputs"]["steps"], 44);
+        assert_eq!(built["3"]["inputs"]["model"], json!(["10", 0]));
+        assert!(built.get("nope").is_none());
     }
 
     #[test]
