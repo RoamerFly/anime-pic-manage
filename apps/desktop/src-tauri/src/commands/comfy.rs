@@ -413,6 +413,12 @@ pub async fn comfy_generate(
     request_id: Option<String>,
 ) -> IpcEnvelope<ComfyGenerateResult> {
     let request_id = normalize_request_id(request_id);
+    // A negative seed means "random"; ComfyUI's API would reject it, so resolve
+    // it once here and report the value that was actually used.
+    let mut request = request;
+    if request.seed < 0 {
+        request.seed = crate::comfy::workflow::resolved_seed(request.seed);
+    }
     let settings = match load_settings(&app) {
         Ok(settings) => settings,
         Err(error) => {

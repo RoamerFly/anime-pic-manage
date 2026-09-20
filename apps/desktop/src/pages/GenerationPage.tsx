@@ -644,7 +644,7 @@ export function GenerationPage() {
               <button
                 className="ghost-button compact"
                 onClick={() => setSeed(-1)}
-                title="-1 表示随机"
+                title="随机：由应用生成一个有效种子（ComfyUI 接口不接受 -1）"
               >
                 随机
               </button>

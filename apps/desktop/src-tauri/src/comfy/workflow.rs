@@ -19,6 +19,19 @@ use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::path::Path;
 
+/// ComfyUI's API rejects a negative seed (`KSampler.seed` has `min: 0`); the
+/// `-1` convention only exists in its own frontend. A negative request from our
+/// UI therefore means "pick a random seed", which we resolve here so the value
+/// shown afterwards is the one that was actually used.
+pub fn resolved_seed(seed: i64) -> i64 {
+    if seed >= 0 {
+        return seed;
+    }
+    // uuid is already a dependency and gives a fresh random value per call;
+    // stay below 2^31 so the number survives JavaScript round-tripping.
+    (uuid::Uuid::new_v4().as_u128() % 2_147_483_647) as i64
+}
+
 pub const TEMPLATE_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -149,7 +162,7 @@ impl WorkflowTemplate {
         template.set_bound("width", json!(request.width));
         template.set_bound("height", json!(request.height));
         template.set_bound("batch", json!(request.batch));
-        template.set_bound("seed", json!(request.seed));
+        template.set_bound("seed", json!(resolved_seed(request.seed)));
         let prefix = request
             .filename_prefix
             .clone()
@@ -246,6 +259,26 @@ mod tests {
             seed: 12345,
             filename_prefix: Some("anime".to_string()),
         }
+    }
+
+    #[test]
+    fn negative_seeds_become_random_valid_seeds() {
+        // ComfyUI's API validates `seed >= 0`; -1 only means "random" in its
+        // own frontend, so the value must never reach /prompt unchanged.
+        let negative = ComfyGenerateRequest {
+            seed: -1,
+            ..request()
+        };
+        let built = template()
+            .build_prompt(&negative)
+            .expect("prompt builds with a random seed");
+        let seed = built["3"]["inputs"]["seed"]
+            .as_i64()
+            .expect("seed is an integer");
+
+        assert!((0..2_147_483_647).contains(&seed));
+        assert_eq!(resolved_seed(4242), 4242);
+        assert_ne!(resolved_seed(-1), resolved_seed(-1));
     }
 
     #[test]
