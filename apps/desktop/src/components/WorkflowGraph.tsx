@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 
 export type NodeOverrides = Record<string, Record<string, unknown>>;
@@ -40,6 +40,55 @@ export interface WorkflowLayout {
   edges: WorkflowEdge[];
   width: number;
   height: number;
+}
+
+export interface Viewport {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
+/** Pan the viewport by a pointer delta (right/middle drag, or background drag). */
+export function panViewport(
+  start: Viewport,
+  deltaX: number,
+  deltaY: number,
+): Viewport {
+  return { ...start, x: start.x + deltaX, y: start.y + deltaY };
+}
+
+/**
+ * Zoom around a point so the content under the cursor stays put.
+ * `pointX/pointY` are relative to the canvas element.
+ */
+export function zoomAtPoint(
+  viewport: Viewport,
+  nextZoom: number,
+  pointX: number,
+  pointY: number,
+): Viewport {
+  const ratio = nextZoom / viewport.zoom;
+  return {
+    zoom: nextZoom,
+    x: pointX - (pointX - viewport.x) * ratio,
+    y: pointY - (pointY - viewport.y) * ratio,
+  };
+}
+
+/** Keep a sliver of the graph visible no matter how far it is dragged. */
+export function clampViewport(
+  viewport: Viewport,
+  layout: { width: number; height: number },
+  canvas: { width: number; height: number },
+): Viewport {
+  const margin = 120;
+  const minX = canvas.width - layout.width * viewport.zoom - margin;
+  const minY = canvas.height - layout.height * viewport.zoom - margin;
+  return {
+    ...viewport,
+    x: Math.min(margin, Math.max(minX, viewport.x)),
+    y: Math.min(margin, Math.max(minY, viewport.y)),
+  };
 }
 
 export const NODE_WIDTH = 260;
@@ -174,9 +223,61 @@ export function WorkflowGraph({
   overrides: NodeOverrides;
   onChange: (nodeId: string, input: string, value: unknown) => void;
 }) {
-  const [zoom, setZoom] = useState(1);
+  const [viewport, setViewport] = useState<Viewport>({ x: 24, y: 24, zoom: 1 });
   const [hovered, setHovered] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef<{ origin: Viewport; pointerX: number; pointerY: number } | null>(null);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
   const layout = useMemo(() => layoutWorkflow(template), [template]);
+
+  const canvasSize = () => ({
+    width: canvasRef.current?.clientWidth ?? 0,
+    height: canvasRef.current?.clientHeight ?? 0,
+  });
+
+  const applyZoom = (nextZoom: number, pointX: number, pointY: number) => {
+    setViewport((current) =>
+      clampViewport(
+        zoomAtPoint(current, nextZoom, pointX, pointY),
+        layout,
+        canvasSize(),
+      ),
+    );
+  };
+
+  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const onNode = (event.target as HTMLElement).closest(".workflow-node") !== null;
+    // Right button anywhere, middle button, or left button on empty space.
+    const pans = event.button === 2 || event.button === 1 || (event.button === 0 && !onNode);
+    if (!pans) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = { origin: viewport, pointerX: event.clientX, pointerY: event.clientY };
+    setDragging(true);
+  };
+
+  const moveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    setViewport(
+      clampViewport(
+        panViewport(drag.origin, event.clientX - drag.pointerX, event.clientY - drag.pointerY),
+        layout,
+        canvasSize(),
+      ),
+    );
+  };
+
+  const endDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    setDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const zoom = viewport.zoom;
 
   if (layout.nodes.length === 0) {
     return <small>这个模板没有可显示的节点。</small>;
@@ -191,7 +292,13 @@ export function WorkflowGraph({
         <button
           type="button"
           className="ghost-button compact"
-          onClick={() => setZoom((value) => Math.max(0.4, value - 0.1))}
+          onClick={() =>
+            applyZoom(
+              Math.max(0.4, zoom - 0.1),
+              canvasSize().width / 2,
+              canvasSize().height / 2,
+            )
+          }
           title="缩小"
         >
           <ZoomOut size={14} />
@@ -200,29 +307,72 @@ export function WorkflowGraph({
         <button
           type="button"
           className="ghost-button compact"
-          onClick={() => setZoom((value) => Math.min(1.6, value + 0.1))}
+          onClick={() =>
+            applyZoom(
+              Math.min(1.8, zoom + 0.1),
+              canvasSize().width / 2,
+              canvasSize().height / 2,
+            )
+          }
           title="放大"
         >
           <ZoomIn size={14} />
         </button>
+        <button
+          type="button"
+          className="ghost-button compact"
+          onClick={() => setViewport({ x: 24, y: 24, zoom: 1 })}
+          title="回到左上角并恢复 100%"
+        >
+          重置视图
+        </button>
         <small>
-          连线按“节点输出 → 具体输入行”绘制；改动只保存在本机，蓝色标记表示已覆盖。
+          右键（或中键）拖动平移，滚轮上下移动，Shift+滚轮左右，Ctrl+滚轮缩放；
+          连线按“节点输出 → 具体输入行”绘制。
         </small>
       </div>
-      <div className="workflow-graph-canvas">
+      <div
+        ref={canvasRef}
+        className={`workflow-graph-canvas${dragging ? " dragging" : ""}`}
+        onPointerDown={startDrag}
+        onPointerMove={moveDrag}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onContextMenu={(event) => event.preventDefault()}
+        onWheel={(event) => {
+          event.preventDefault();
+          const rect = event.currentTarget.getBoundingClientRect();
+          if (event.ctrlKey || event.metaKey) {
+            const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+            applyZoom(
+              Math.min(1.8, Math.max(0.4, zoom * factor)),
+              event.clientX - rect.left,
+              event.clientY - rect.top,
+            );
+            return;
+          }
+          setViewport((current) =>
+            clampViewport(
+              {
+                ...current,
+                x: current.x - (event.shiftKey ? event.deltaY : 0),
+                y: current.y - (event.shiftKey ? 0 : event.deltaY),
+              },
+              layout,
+              canvasSize(),
+            ),
+          );
+        }}
+      >
         <div
-          className="workflow-graph-stage"
-          style={{ width: layout.width * zoom, height: layout.height * zoom }}
+          className="workflow-graph-viewport"
+          style={{
+            width: layout.width,
+            height: layout.height,
+            transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${zoom})`,
+            transformOrigin: "0 0",
+          }}
         >
-          <div
-            style={{
-              width: layout.width,
-              height: layout.height,
-              transform: `scale(${zoom})`,
-              transformOrigin: "top left",
-              position: "relative",
-            }}
-          >
             <svg
               className="workflow-graph-edges"
               width={layout.width}
@@ -359,7 +509,6 @@ export function WorkflowGraph({
                 </div>
               );
             })}
-          </div>
         </div>
       </div>
     </div>

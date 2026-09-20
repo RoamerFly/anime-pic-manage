@@ -241,7 +241,11 @@
 
 .workflow-graph-canvas {
   max-height: 460px;
-  overflow: auto;
+  height: 460px;
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
   border: 1px solid #e8ebf4;
   border-radius: 10px;
   background:
@@ -249,8 +253,14 @@
     #fbfcff;
 }
 
-.workflow-graph-stage {
-  position: relative;
+.workflow-graph-canvas.dragging {
+  cursor: grabbing;
+}
+
+.workflow-graph-viewport {
+  position: absolute;
+  top: 0;
+  left: 0;
 }
 
 .workflow-graph-edges {

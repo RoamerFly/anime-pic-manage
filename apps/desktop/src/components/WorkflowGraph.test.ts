@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { graphNodesOf, layoutWorkflow, linkOf } from "./WorkflowGraph";
+import {
+  clampViewport,
+  graphNodesOf,
+  layoutWorkflow,
+  linkOf,
+  panViewport,
+  zoomAtPoint,
+} from "./WorkflowGraph";
 
 const template = {
   prompt: {
@@ -97,5 +104,39 @@ describe("workflow graph layout", () => {
   it("reads the node map from an envelope or a raw graph", () => {
     expect(Object.keys(graphNodesOf(template))).toEqual(["3", "4", "6", "7"]);
     expect(Object.keys(graphNodesOf(template.prompt))).toHaveLength(4);
+  });
+});
+
+describe("workflow viewport", () => {
+  it("pans freely on both axes", () => {
+    const start = { x: 10, y: 20, zoom: 1 };
+
+    expect(panViewport(start, 30, -15)).toEqual({ x: 40, y: 5, zoom: 1 });
+    // Dragging right and down must not be clamped to a single axis.
+    expect(panViewport(start, -30, 45)).toEqual({ x: -20, y: 65, zoom: 1 });
+  });
+
+  it("keeps the point under the cursor fixed while zooming", () => {
+    const start = { x: 0, y: 0, zoom: 1 };
+
+    const zoomed = zoomAtPoint(start, 2, 100, 50);
+
+    // content point (100,50) stays under the cursor after scaling 1 -> 2
+    expect(zoomed.zoom).toBe(2);
+    expect(zoomed.x + 100 * 2).toBeCloseTo(100, 5);
+    expect(zoomed.y + 50 * 2).toBeCloseTo(50, 5);
+  });
+
+  it("allows overscroll but keeps part of the graph reachable", () => {
+    const layout = { width: 1000, height: 600 };
+    const canvas = { width: 400, height: 300 };
+
+    const dragged = clampViewport({ x: 9999, y: 9999, zoom: 1 }, layout, canvas);
+    expect(dragged.x).toBeLessThanOrEqual(120);
+    expect(dragged.y).toBeLessThanOrEqual(120);
+
+    const farLeft = clampViewport({ x: -9999, y: -9999, zoom: 1 }, layout, canvas);
+    expect(farLeft.x).toBeGreaterThanOrEqual(canvas.width - layout.width - 120);
+    expect(farLeft.y).toBeGreaterThanOrEqual(canvas.height - layout.height - 120);
   });
 });
