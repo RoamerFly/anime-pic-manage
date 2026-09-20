@@ -28,6 +28,7 @@ import type {
   ComfyStatus,
   CudaInstallProgress,
   CudaRuntimeStatus,
+  EnvironmentInstallProgress,
   GpuInventory,
   KohyaEnvironment,
   KohyaStatus,
@@ -42,6 +43,7 @@ import type {
   WorkerCapabilities,
   WorkerComputeDevice,
   WorkerComputeStatus,
+  WorkerEnvironmentStatus,
   WorkerRuntimeMode,
   WorkerRuntimeSettings,
 } from "@anime-pic-manage/shared-types";
@@ -91,6 +93,7 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   background_priority: "below_normal",
   reference_matching_enabled: false,
   reference_backend: "ccip",
+  network_proxy: "127.0.0.1:7890",
 };
 
 const SETTINGS_TABS: Array<{
@@ -170,6 +173,8 @@ export function WorkerRuntimeSettingsPanel({
   onChangeDevice,
   cudaRuntimeDir,
   onChangeCudaRuntimeDir,
+  networkProxy,
+  onChangeNetworkProxy,
   onCudaInstalled,
   backgroundPriority,
   onChangeBackgroundPriority,
@@ -184,6 +189,8 @@ export function WorkerRuntimeSettingsPanel({
   onChangeDevice: (device: WorkerComputeDevice) => void;
   cudaRuntimeDir: string;
   onChangeCudaRuntimeDir: (value: string) => void;
+  networkProxy: string;
+  onChangeNetworkProxy: (value: string) => void;
   /** Re-probe the engine after the runtime was downloaded (it restarts). */
   onCudaInstalled?: () => void;
   backgroundPriority: AppSettings["background_priority"];
@@ -204,6 +211,11 @@ export function WorkerRuntimeSettingsPanel({
   const [cudaRuntime, setCudaRuntime] = useState<CudaRuntimeStatus | null>(null);
   const [cudaProgress, setCudaProgress] = useState<CudaInstallProgress | null>(null);
   const [installing, setInstalling] = useState(false);
+  const [workerEnvironment, setWorkerEnvironment] =
+    useState<WorkerEnvironmentStatus | null>(null);
+  const [environmentProgress, setEnvironmentProgress] =
+    useState<EnvironmentInstallProgress | null>(null);
+  const [installingEnvironment, setInstallingEnvironment] = useState(false);
 
   useEffect(() => {
     if (!isTauriRuntime()) return;
@@ -213,18 +225,34 @@ export function WorkerRuntimeSettingsPanel({
         "cuda.status",
       );
       setCudaRuntime(response.payload ?? null);
+      const environmentResponse = await invokeCore<WorkerEnvironmentStatus>(
+        "worker_environment_status",
+        "worker.environment.status",
+      );
+      setWorkerEnvironment(environmentResponse.payload ?? null);
     })();
     let active = true;
     let stop: (() => void) | undefined;
+    let stopEnvironment: (() => void) | undefined;
     void listen<CudaInstallProgress>("cuda://install", (event) => {
       if (active) setCudaProgress(event.payload);
     }).then((unlisten) => {
       if (active) stop = unlisten;
       else unlisten();
     });
+    void listen<EnvironmentInstallProgress>(
+      "worker-environment://install",
+      (event) => {
+        if (active) setEnvironmentProgress(event.payload);
+      },
+    ).then((unlisten) => {
+      if (active) stopEnvironment = unlisten;
+      else unlisten();
+    });
     return () => {
       active = false;
       stop?.();
+      stopEnvironment?.();
     };
   }, []);
 
@@ -254,6 +282,35 @@ export function WorkerRuntimeSettingsPanel({
       }
     } finally {
       setInstalling(false);
+    }
+  };
+
+  const installWorkerEnvironment = async () => {
+    setInstallingEnvironment(true);
+    setEnvironmentProgress({
+      phase: "downloading",
+      current: 0,
+      total: 0,
+      message: "正在准备独立 AI 运行环境…",
+    });
+    try {
+      const response = await invokeCore<WorkerEnvironmentStatus>(
+        "install_worker_environment",
+        "worker.environment.install",
+      );
+      setWorkerEnvironment(response.payload ?? null);
+      if (response.error) {
+        setEnvironmentProgress({
+          phase: "error",
+          current: 0,
+          total: 0,
+          message: response.error.detail ?? response.error.message,
+        });
+      } else {
+        onCudaInstalled?.();
+      }
+    } finally {
+      setInstallingEnvironment(false);
     }
   };
 
@@ -355,6 +412,56 @@ export function WorkerRuntimeSettingsPanel({
       </div>
       <div className="settings-field settings-field-stacked">
         <div>
+          <strong>独立 AI 运行环境</strong>
+          <small>
+            程序本体保持轻量；CPU/GPU Worker 与 Python 环境只在首次使用或环境版本变化时单独准备，应用升级会继续复用。
+          </small>
+        </div>
+        <div className="generation-inline">
+          <button
+            type="button"
+            className="primary-button"
+            disabled={installingEnvironment || !isTauriRuntime()}
+            onClick={() => void installWorkerEnvironment()}
+          >
+            {installingEnvironment ? (
+              <LoaderCircle size={15} className="spin" />
+            ) : (
+              <Download size={15} />
+            )}
+            {workerEnvironment?.installed
+              ? "检查并重装 AI 环境"
+              : "准备 AI 运行环境"}
+          </button>
+          <small>
+            {environmentProgress?.message ??
+              workerEnvironment?.message ??
+              "正在读取独立环境状态…"}
+            {workerEnvironment?.directory
+              ? ` · ${workerEnvironment.directory}`
+              : ""}
+          </small>
+        </div>
+      </div>
+      <div className="settings-field settings-field-stacked">
+        <div>
+          <strong>网络代理</strong>
+          <small>
+            用于 CUDA、模型和 Hugging Face 下载；默认使用本机代理 127.0.0.1:7890，留空即可直连。
+            修改后会自动重启推理引擎。
+          </small>
+        </div>
+        <input
+          type="text"
+          className="settings-text-input settings-text-input-wide"
+          value={networkProxy}
+          placeholder="127.0.0.1:7890"
+          onChange={(event) => onChangeNetworkProxy(event.target.value)}
+          aria-label="网络代理"
+        />
+      </div>
+      <div className="settings-field settings-field-stacked">
+        <div>
           <strong>CUDA 运行时目录（可选）</strong>
           <small>
             {describeCudaRuntime(capabilities?.compute)}
@@ -413,12 +520,14 @@ export function WorkerRuntimeSettingsPanel({
             ) : (
               <Sparkles size={15} />
             )}
-            一键下载 CUDA 运行时（约 1.4GB）
+            {cudaRuntime?.installed
+              ? "重新准备 CUDA 运行时"
+              : "一键下载 CUDA 运行时（约 2.1GB）"}
           </button>
           <small>
             {cudaProgress?.message ??
               (cudaRuntime?.installed
-                ? `已下载 ${cudaRuntime.packages.length} 个 DLL · ${cudaRuntime.size_mb} MB · 位于 ${cudaRuntime.directory}`
+                ? `已就绪 ${cudaRuntime.packages.length} 个 DLL · ${cudaRuntime.size_mb} MB · 位于 ${cudaRuntime.directory}`
                 : "从 PyPI 下载 NVIDIA 官方运行库到 app\\cuda，无需在系统里安装 CUDA，也不会重分发这些文件。")}
           </small>
         </div>
@@ -2460,6 +2569,8 @@ export function SettingsPage({
             onChangeCudaRuntimeDir={(value) =>
               patchSettings({ cuda_runtime_dir: value })
             }
+            networkProxy={settings.network_proxy}
+            onChangeNetworkProxy={(value) => patchSettings({ network_proxy: value })}
             onCudaInstalled={() => {
               void probeCompute().catch(() => undefined);
               void onRefresh?.();

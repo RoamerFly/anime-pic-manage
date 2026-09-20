@@ -6,6 +6,7 @@ use crate::models::{
     BatchMoveResult, LibrarySelection, MoveFileErrorItem, MovedFileItem, ScanCancellation,
     ScanError, ScanLibraryResult, ScanProgress,
 };
+use crate::path_utils::{canonicalize_for_user, display_path};
 use crate::result_store::{self, ResultKind};
 use crate::state::{AppState, ScanControl, ScanControlResponse};
 use crate::worker_runtime::{self, WorkerManager};
@@ -91,7 +92,7 @@ fn emit_scan_result(
     let _ = app.emit(
         "library://scan-result",
         json!({
-            "directory": directory.to_string_lossy(),
+            "directory": display_path(directory),
             "total_discovered": total_discovered,
             "processed": processed,
             "result": result,
@@ -243,7 +244,7 @@ fn run_library_scan(
             worker_runtime::WorkerRuntimeError::Io("Worker 状态锁已中毒".to_string())
         })?;
         let mut enum_payload = json!({
-            "directory": directory.to_string_lossy(),
+            "directory": display_path(&directory),
             "recursive": true,
             "include_hidden": false,
         });
@@ -290,7 +291,7 @@ fn run_library_scan(
     let do_skip_annotated = skip_annotated.unwrap_or(false);
     let annotated_paths = if do_skip_annotated {
         if let Ok(db) = database.lock() {
-            db.list_annotated_image_paths(&directory.to_string_lossy())
+            db.list_annotated_image_paths(&display_path(&directory))
                 .unwrap_or_default()
         } else {
             std::collections::HashSet::new()
@@ -304,7 +305,7 @@ fn run_library_scan(
             Ok(context) => context,
             Err(error) => {
                 errors.push(ScanError {
-                    path: directory.to_string_lossy().into_owned(),
+                    path: display_path(&directory),
                     code: "PERSONAL_MODEL_READ_FAILED".to_string(),
                     message: "读取个人分类特征失败，已跳过个人融合。".to_string(),
                     detail: Some(error.to_string()),
@@ -317,7 +318,7 @@ fn run_library_scan(
         },
         Err(_) => {
             errors.push(ScanError {
-                path: directory.to_string_lossy().into_owned(),
+                path: display_path(&directory),
                 code: "DATABASE_LOCK_FAILED".to_string(),
                 message: "本地数据库暂时被占用，已跳过个人融合。".to_string(),
                 detail: None,
@@ -548,7 +549,7 @@ fn run_library_scan(
         if cancelled { "cancelled" } else { "complete" },
         processed,
         total,
-        directory.to_string_lossy(),
+        display_path(&directory),
         if cancelled {
             "已取消扫描，已完成的识别结果仍会保留。"
         } else {
@@ -556,7 +557,7 @@ fn run_library_scan(
         },
     );
     Ok(ScanLibraryResult {
-        directory: directory.to_string_lossy().into_owned(),
+        directory: display_path(&directory),
         total_discovered,
         processed,
         cancelled,
@@ -590,7 +591,7 @@ pub fn register_library_selection(
             ),
         );
     }
-    let directory = match fs::canonicalize(candidate) {
+    let directory = match canonicalize_for_user(candidate) {
         Ok(directory) if directory.is_dir() => directory,
         Ok(_) => {
             return failure(
@@ -637,7 +638,7 @@ pub fn register_library_selection(
         "library.select",
         request_id,
         LibrarySelection {
-            path: directory.to_string_lossy().into_owned(),
+            path: display_path(&directory),
             display_name,
         },
     )
@@ -664,7 +665,7 @@ pub fn register_preview_file(
             ),
         );
     }
-    let file = match fs::canonicalize(candidate) {
+    let file = match canonicalize_for_user(candidate) {
         Ok(file) if file.is_file() => file,
         Ok(_) => {
             return failure(
@@ -723,7 +724,7 @@ pub fn register_preview_file(
         "library.preview.file",
         request_id,
         LibrarySelection {
-            path: file.to_string_lossy().into_owned(),
+            path: display_path(&file),
             display_name: display_name_for_path(&file),
         },
     )
@@ -754,7 +755,7 @@ pub async fn scan_library_preview(
             ),
         ));
     }
-    let directory = match fs::canonicalize(candidate) {
+    let directory = match canonicalize_for_user(candidate) {
         Ok(directory) if directory.is_dir() => directory,
         Ok(_) => {
             return Ok(failure(

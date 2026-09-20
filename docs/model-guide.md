@@ -51,11 +51,13 @@ models/
 
 模型元数据 `supported_devices` 需要包含 `cuda` 才会在“自动”模式下启用显卡，`resources/model-manifests/*.example.json` 与随仓库提供的 `models/*/metadata.json` 已包含该声明。
 
-发行版默认携带 CPU 版 ONNX Runtime。GPU 版用 `scripts/package_windows.ps1 -ProjectRoot <仓库根目录> -Cuda` 打包，目标机器仍需安装匹配的 NVIDIA 驱动与 CUDA/cuDNN 运行时；未安装时请保持“仅 CPU”，或在“自动”模式下接受回退到 CPU。设置页的“运行能力”会显示当前检测到的执行提供器。
+CPU 发行版携带 CPU 版 ONNX Runtime。GPU 版用 `scripts/package_windows.ps1 -ProjectRoot <仓库根目录> -Cuda` 打包，同时从 NVIDIA 官方 PyPI wheel 准备 CUDA 12、cuBLAS、cuFFT 与 cuDNN 9 到 `app\cuda`；目标机器只需兼容的 NVIDIA 驱动，不必安装系统 CUDA。设置页的“运行能力”和“CUDA 实测”会分别显示执行提供器、DLL 加载和真实模型会话结果。
 
 仓库根目录提供两个 GPU 构建入口：`build_gpu.bat`（全量，输出 `dist_windows_gpu`）与 `build_gpu_fast.bat`（复用上一次 GPU 构建的运行时与 Python 环境，只重建程序与 Worker 逻辑）。GPU 构建使用独立环境 `apps/ai-worker/.venv-gpu`，不会污染开发用的 `.venv`。构建完成后，设置页“环境配置”的“CUDA 实测”会用已安装模型真实加载一次会话，直接给出识别实际使用的执行提供器，而不是只看运行时声明。
 
 设置页按用途分为五个页签：
+
+“基础配置”里的网络代理默认是 `127.0.0.1:7890`，会统一用于 CUDA 运行时、模型/Hugging Face 下载以及 AI Worker 发起的网络请求。可填写 `host:port` 或完整的 `http(s)://host:port`；清空并保存后恢复直连。
 
 | 页签 | 主要内容 |
 | --- | --- |

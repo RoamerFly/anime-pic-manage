@@ -1,8 +1,10 @@
 //! Unified application settings commands shared by the settings tabs.
 
-use crate::app_settings::{load_app_settings, save_app_settings, AppSettings};
+use crate::app_settings::{load_app_settings, proxy_url, save_app_settings, AppSettings};
 use crate::ipc::{core_error, failure, normalize_request_id, success, IpcEnvelope};
+use crate::portable::effective_cuda_runtime_dir;
 use crate::state::AppState;
+use std::path::Path;
 use tauri::State;
 
 #[tauri::command]
@@ -82,7 +84,11 @@ pub fn update_app_settings(
     if let Ok(mut worker) = state.worker.lock() {
         worker.set_onnx_threads(settings.recognition_onnx_threads);
         // A changed CUDA runtime folder takes effect on the next Worker start.
-        worker.set_cuda_runtime_dir(Some(settings.cuda_runtime_dir.clone()));
+        worker.set_cuda_runtime_dir(effective_cuda_runtime_dir(
+            Path::new(&state.data_dir),
+            &settings.cuda_runtime_dir,
+        ));
+        worker.set_network_proxy(proxy_url(&settings.network_proxy));
         worker.set_below_normal_priority(settings.background_priority != "normal");
     }
 

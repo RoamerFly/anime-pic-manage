@@ -131,38 +131,50 @@ function useRuntimeStatus() {
   const [status, setStatus] = useState<RuntimeStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [warming, setWarming] = useState(false);
+  const refreshSequence = useRef(0);
   const refresh = useCallback(async () => {
+    const sequence = ++refreshSequence.current;
     setLoading(true);
-    try {
-      // Starting the packaged Worker (one-file extraction + ONNX imports) can
-      // take around ten seconds on a cold start, so the first probe waits
-      // longer. The command itself runs off the main thread, which keeps the
-      // window and its file dialogs responsive while it runs.
-      const response = await settleWithin(
-        invokeCore<RuntimeStatus>("get_runtime_status", "system.health"),
-        30_000,
-      );
-      if (!response || response.error || !response.payload)
-        setError(
-          response?.error?.message ??
-            "AI 推理环境首次启动较慢，状态检查超时；可继续操作，稍后点击刷新重试。",
-        );
-      else {
+    setWarming(false);
+    setError(null);
+
+    const applyResponse = (response: Awaited<ReturnType<typeof invokeCore<RuntimeStatus>>>) => {
+      if (sequence !== refreshSequence.current) return;
+      if (response.error || !response.payload) {
+        setError(response.error?.message ?? "AI 推理环境没有返回可用状态。");
+      } else {
         setStatus(response.payload);
         setError(null);
       }
-    } finally {
+      setWarming(false);
       setLoading(false);
+    };
+
+    // A signed GPU package can need more than 30 seconds on the very first
+    // launch while antivirus scans the Worker and CUDA DLLs. Keep the original
+    // request alive and apply its result automatically instead of reporting a
+    // false failure and asking the user to refresh manually.
+    const task = invokeCore<RuntimeStatus>("get_runtime_status", "system.health");
+    const response = await settleWithin(task, 30_000);
+    if (sequence !== refreshSequence.current) return;
+    if (response) {
+      applyResponse(response);
+      return;
     }
+
+    setLoading(false);
+    setWarming(true);
+    void task.then(applyResponse);
   }, []);
   useEffect(() => {
     void refresh();
   }, [refresh]);
-  return { status, error, loading, refresh };
+  return { status, error, loading, warming, refresh };
 }
 
 function App() {
-  const { status, error, loading, refresh } = useRuntimeStatus();
+  const { status, error, loading, warming, refresh } = useRuntimeStatus();
   const [initialLoaded, setInitialLoaded] = useState(false);
   const [library, setLibrary] = useState<LibrarySelection | null>(null);
   const [recentScan, setRecentScan] = useState<RecentScanSummary | null>(() =>
@@ -210,10 +222,10 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!loading && (status || error)) {
+    if (!loading && (status || error || warming)) {
       setInitialLoaded(true);
     }
-  }, [loading, status, error]);
+  }, [loading, status, error, warming]);
 
   const flushPartialScan = useCallback(() => {
     if (partialPersistTimerRef.current) {
@@ -596,8 +608,9 @@ function App() {
     );
   }, [location.pathname]);
 
-  const runtimeLabel =
-    status?.database.status === "ready"
+  const runtimeLabel = warming
+    ? "AI 推理环境正在启动"
+    : status?.database.status === "ready"
       ? "本地核心已连接"
       : isTauriRuntime()
         ? "桌面核心未连接"
@@ -720,6 +733,15 @@ function App() {
             <AlertCircle size={17} />
             <span>{error}</span>
             <button onClick={() => void refresh()}>重试</button>
+          </div>
+        )}
+
+        {warming && !error && (
+          <div className="alert info" role="status" aria-live="polite">
+            <LoaderCircle size={17} className="spin" />
+            <span>
+              AI 推理环境正在完成首次初始化；完成后会自动连接，无需手动刷新。
+            </span>
           </div>
         )}
 

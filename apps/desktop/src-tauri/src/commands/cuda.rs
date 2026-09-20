@@ -1,9 +1,8 @@
 //! Download the CUDA 12 / cuDNN 9 runtime into the portable package.
 //!
-//! The application never redistributes NVIDIA binaries: it fetches the
-//! official `nvidia-*` wheels from PyPI on request, extracts the DLLs into
-//! `app\cuda\` and points the inference engine at that folder. Machines that
-//! already have CUDA 12 / cuDNN 9 installed keep working without any of this.
+//! CPU packages fetch the official `nvidia-*` wheels from PyPI on request.
+//! GPU packages prepare the same wheel payload at build time. Both layouts put
+//! the DLLs in `app\cuda\` and never modify the machine-wide CUDA installation.
 
 use crate::ipc::{core_error, failure, normalize_request_id, success, IpcEnvelope};
 use crate::portable::PortableLayout;
@@ -99,7 +98,7 @@ pub fn runtime_status(app: &AppHandle) -> CudaRuntimeStatus {
         packages,
         size_mb: (size_mb * 10.0).round() / 10.0,
         message: if installed {
-            "已下载 CUDA 运行时，推理引擎会优先使用它。".to_string()
+            "CUDA 运行时已就绪，推理引擎会优先使用它。".to_string()
         } else {
             "尚未下载 CUDA 运行时；GPU 版目前会回落到 CPU。".to_string()
         },
@@ -263,10 +262,33 @@ pub async fn install_cuda_runtime(
         );
     }
 
-    let client = match reqwest::Client::builder()
-        .user_agent("anime-pic-manage")
-        .build()
-    {
+    let proxy = app
+        .state::<AppState>()
+        .database
+        .lock()
+        .ok()
+        .and_then(|database| crate::app_settings::load_app_settings(&database).ok())
+        .and_then(|settings| crate::app_settings::proxy_url(&settings.network_proxy));
+    let mut client_builder = reqwest::Client::builder().user_agent("anime-pic-manage");
+    if let Some(proxy) = proxy {
+        client_builder = match reqwest::Proxy::all(&proxy) {
+            Ok(proxy) => client_builder.proxy(proxy),
+            Err(error) => {
+                return failure(
+                    "cuda.install",
+                    request_id.clone(),
+                    core_error(
+                        &request_id,
+                        "HTTP_PROXY_FAILED",
+                        &error.to_string(),
+                        None,
+                        false,
+                    ),
+                )
+            }
+        };
+    }
+    let client = match client_builder.build() {
         Ok(client) => client,
         Err(error) => {
             return failure(

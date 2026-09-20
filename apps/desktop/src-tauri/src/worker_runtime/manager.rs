@@ -24,6 +24,8 @@ pub struct WorkerManager {
     onnx_threads: u32,
     /// Optional folder holding CUDA 12 / cuDNN 9 DLLs for GPU inference.
     cuda_runtime_dir: Option<String>,
+    /// Optional HTTP(S) proxy inherited by model and dependency download code.
+    network_proxy: Option<String>,
     /// Application data folder. The Worker pins its Hugging Face cache inside
     /// it so every downloaded model lives with the package.
     data_dir: Option<String>,
@@ -35,6 +37,10 @@ pub struct WorkerManager {
 }
 
 impl WorkerManager {
+    pub fn stop(&mut self) {
+        self.clear_process();
+    }
+
     pub fn new(resource_dir: Option<PathBuf>) -> Self {
         Self::with_settings(
             resource_dir,
@@ -68,6 +74,7 @@ impl WorkerManager {
             compute_device,
             onnx_threads,
             cuda_runtime_dir: None,
+            network_proxy: None,
             data_dir: None,
             below_normal_priority: true,
             child: None,
@@ -115,6 +122,16 @@ impl WorkerManager {
         if self.cuda_runtime_dir != normalized {
             self.clear_process();
             self.cuda_runtime_dir = normalized;
+        }
+    }
+
+    /// Configure the proxy used by the Python Worker. The process is restarted
+    /// so all requests consistently inherit the new environment.
+    pub fn set_network_proxy(&mut self, network_proxy: Option<String>) {
+        let normalized = network_proxy.and_then(|value| crate::app_settings::proxy_url(&value));
+        if self.network_proxy != normalized {
+            self.clear_process();
+            self.network_proxy = normalized;
         }
     }
 
@@ -301,6 +318,18 @@ impl WorkerManager {
         }
         if let Some(hf_cache_dir) = self.hf_cache_dir() {
             command.env("ANIME_PIC_HF_CACHE", hf_cache_dir);
+        }
+        if let Some(proxy) = self.network_proxy.as_deref() {
+            for key in [
+                "HTTP_PROXY",
+                "HTTPS_PROXY",
+                "ALL_PROXY",
+                "http_proxy",
+                "https_proxy",
+                "all_proxy",
+            ] {
+                command.env(key, proxy);
+            }
         }
         configure_background_command_with(&mut command, self.below_normal_priority);
         let mut child = command

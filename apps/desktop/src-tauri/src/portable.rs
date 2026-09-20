@@ -22,6 +22,13 @@
 
 use std::path::{Path, PathBuf};
 
+pub const REQUIRED_CUDA_DLLS: [&str; 4] = [
+    "cudart64_12.dll",
+    "cublas64_12.dll",
+    "cublasLt64_12.dll",
+    "cudnn64_9.dll",
+];
+
 /// Root of the portable package that contains the given executable.
 pub fn portable_root(exe_dir: &Path) -> PathBuf {
     exe_dir.to_path_buf()
@@ -46,6 +53,23 @@ pub fn portable_output_dir(exe_dir: &Path) -> PathBuf {
 /// Where a downloaded CUDA 12 / cuDNN 9 runtime lives.
 pub fn portable_cuda_dir(exe_dir: &Path) -> PathBuf {
     portable_app_dir(exe_dir).join("cuda")
+}
+
+pub fn cuda_runtime_ready(directory: &Path) -> bool {
+    REQUIRED_CUDA_DLLS
+        .iter()
+        .all(|name| directory.join(name).is_file())
+}
+
+/// Resolve the configured CUDA folder, falling back to a complete runtime
+/// bundled under `<package>\app\cuda` for GPU distributions.
+pub fn effective_cuda_runtime_dir(data_dir: &Path, configured: &str) -> Option<String> {
+    let configured = configured.trim();
+    if !configured.is_empty() {
+        return Some(configured.to_string());
+    }
+    let bundled = PortableLayout::from_data_dir(data_dir).cuda_dir();
+    cuda_runtime_ready(&bundled).then(|| bundled.to_string_lossy().into_owned())
 }
 
 /// Layout derived from an application data directory.
@@ -122,5 +146,21 @@ mod tests {
 
         assert_eq!(layout.root, PathBuf::from(""));
         assert!(layout.output_dir().ends_with("output"));
+    }
+
+    #[test]
+    fn explicit_cuda_directory_takes_precedence() {
+        assert_eq!(
+            effective_cuda_runtime_dir(Path::new(r"D:\App\data"), r"E:\CUDA"),
+            Some(r"E:\CUDA".to_string())
+        );
+    }
+
+    #[test]
+    fn incomplete_bundled_cuda_directory_is_not_selected() {
+        let root = std::env::temp_dir().join(format!("anime-cuda-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(root.join("app").join("cuda")).unwrap();
+        assert_eq!(effective_cuda_runtime_dir(&root.join("data"), ""), None);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

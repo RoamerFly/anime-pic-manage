@@ -7,11 +7,5 @@ if not exist "anime-pic-manage.exe" (
     pause
     exit /b 1
 )
-if not exist "app\runtime\ai-worker.exe" (
-    echo [错误] 缺少 app\runtime\ai-worker.exe，压缩包可能没有解压完整。
-    echo        请删除后重新解压整个文件夹，不要只解压单个文件。
-    pause
-    exit /b 1
-)
 start "" "anime-pic-manage.exe"
 exit /b 0

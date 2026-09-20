@@ -8,8 +8,8 @@ use crate::database::{
     Database, BACKGROUND_PRIORITY_SETTING, COMFY_AUTO_START_SETTING, COMFY_LOW_VRAM_SETTING,
     COMFY_OUTPUT_DIR_SETTING, COMFY_PORT_SETTING, COMFY_ROOT_SETTING, CUDA_RUNTIME_DIR_SETTING,
     LORA_TRAINER_BASE_MODEL_SETTING, LORA_TRAINER_OUTPUT_DIR_SETTING, LORA_TRAINER_PYTHON_SETTING,
-    LORA_TRAINER_ROOT_SETTING, RECOGNIZER_MODEL_SETTING, REFERENCE_BACKEND_SETTING,
-    REFERENCE_MATCHING_SETTING, SIMILARITY_ARCHIVE_DIR_SETTING,
+    LORA_TRAINER_ROOT_SETTING, NETWORK_PROXY_SETTING, RECOGNIZER_MODEL_SETTING,
+    REFERENCE_BACKEND_SETTING, REFERENCE_MATCHING_SETTING, SIMILARITY_ARCHIVE_DIR_SETTING,
     SIMILARITY_INCLUDE_SUBFOLDERS_SETTING, SIMILARITY_THRESHOLD_SETTING,
     SIMILARITY_WORKERS_SETTING, UI_FONT_SIZE_SETTING, WORKER_ONNX_THREADS_SETTING,
     WORKER_SKIP_ANNOTATED_SETTING,
@@ -30,6 +30,7 @@ pub const UI_FONT_SIZE_STEP: f64 = 0.5;
 pub const MIN_COMFY_PORT: u16 = 1024;
 pub const MAX_COMFY_PORT: u16 = 65535;
 pub const DEFAULT_COMFY_PORT: u16 = 8188;
+pub const DEFAULT_NETWORK_PROXY: &str = "127.0.0.1:7890";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AppSettings {
@@ -75,6 +76,9 @@ pub struct AppSettings {
     pub reference_matching_enabled: bool,
     /// Similarity backend of that library: `ccip` or `embedding`.
     pub reference_backend: String,
+    /// Optional HTTP(S) proxy for model, CUDA and Hugging Face downloads.
+    /// Stored without a scheme for a compact UI value; runtime adds `http://`.
+    pub network_proxy: String,
 }
 
 pub fn default_similarity_workers() -> u32 {
@@ -108,8 +112,28 @@ impl Default for AppSettings {
             background_priority: "below_normal".to_string(),
             reference_matching_enabled: false,
             reference_backend: "ccip".to_string(),
+            network_proxy: DEFAULT_NETWORK_PROXY.to_string(),
         }
     }
+}
+
+/// Convert the user-facing proxy value into a URL accepted by reqwest and
+/// proxy-aware Python libraries. Empty input disables proxying.
+pub fn proxy_url(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let candidate = if trimmed.contains("://") {
+        trimmed.to_string()
+    } else {
+        format!("http://{trimmed}")
+    };
+    let parsed = reqwest::Url::parse(&candidate).ok()?;
+    if !matches!(parsed.scheme(), "http" | "https") || parsed.host_str().is_none() {
+        return None;
+    }
+    Some(candidate)
 }
 
 impl AppSettings {
@@ -166,6 +190,10 @@ impl AppSettings {
         self.lora_trainer_base_model = self.lora_trainer_base_model.trim().to_string();
         self.lora_trainer_output_dir = self.lora_trainer_output_dir.trim().to_string();
         self.cuda_runtime_dir = self.cuda_runtime_dir.trim().to_string();
+        self.network_proxy = self.network_proxy.trim().to_string();
+        if !self.network_proxy.is_empty() && proxy_url(&self.network_proxy).is_none() {
+            return Err("网络代理必须是 host:port 或 http(s)://host:port 格式。".to_string());
+        }
         self.recognition_recognizer_model = self.recognition_recognizer_model.trim().to_string();
         let priority = self.background_priority.trim().to_ascii_lowercase();
         self.background_priority = if priority == "normal" {
@@ -279,6 +307,10 @@ pub fn load_app_settings(database: &Database) -> Result<AppSettings, String> {
         .map_err(|error| error.to_string())?
         .filter(|value| value == "ccip" || value == "embedding")
         .unwrap_or_else(|| defaults.reference_backend.clone());
+    let network_proxy = database
+        .get_setting_string(NETWORK_PROXY_SETTING)
+        .map_err(|error| error.to_string())?
+        .unwrap_or_else(|| defaults.network_proxy.clone());
 
     AppSettings {
         recognition_onnx_threads: onnx_threads,
@@ -327,6 +359,7 @@ pub fn load_app_settings(database: &Database) -> Result<AppSettings, String> {
             defaults.reference_matching_enabled,
         ),
         reference_backend,
+        network_proxy,
     }
     .validated()
     .or(Ok(defaults))
@@ -339,7 +372,7 @@ pub fn load_app_settings(database: &Database) -> Result<AppSettings, String> {
 /// keys and no `comfy.*` rows at all).
 pub fn save_app_settings(database: &mut Database, settings: &AppSettings) -> Result<(), String> {
     let settings = settings.clone().validated()?;
-    let entries: [(&str, String); 21] = [
+    let entries: [(&str, String); 22] = [
         (
             WORKER_ONNX_THREADS_SETTING,
             settings.recognition_onnx_threads.to_string(),
@@ -409,6 +442,7 @@ pub fn save_app_settings(database: &mut Database, settings: &AppSettings) -> Res
             REFERENCE_BACKEND_SETTING,
             settings.reference_backend.clone(),
         ),
+        (NETWORK_PROXY_SETTING, settings.network_proxy.clone()),
     ];
     let transaction = database
         .connection
@@ -474,7 +508,7 @@ mod tests {
             .connection
             .query_row("SELECT COUNT(*) FROM settings", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(stored, 21, "every setting must be persisted");
+        assert_eq!(stored, 22, "every setting must be persisted");
     }
 
     #[test]
@@ -508,6 +542,7 @@ mod tests {
             background_priority: "normal".to_string(),
             reference_matching_enabled: true,
             reference_backend: "ccip".to_string(),
+            network_proxy: "http://127.0.0.1:8080".to_string(),
         };
         save_app_settings(&mut database, &custom).expect("save settings");
 
@@ -550,6 +585,24 @@ mod tests {
     }
 
     #[test]
+    fn proxy_value_is_normalized_and_validated() {
+        assert_eq!(
+            proxy_url("127.0.0.1:7890").as_deref(),
+            Some("http://127.0.0.1:7890")
+        );
+        assert_eq!(
+            proxy_url("https://proxy.example:443").as_deref(),
+            Some("https://proxy.example:443")
+        );
+        assert!(AppSettings {
+            network_proxy: "not a proxy".to_string(),
+            ..Default::default()
+        }
+        .validated()
+        .is_err());
+    }
+
+    #[test]
     fn validation_rejects_out_of_range_values() {
         let too_many_threads = AppSettings {
             recognition_onnx_threads: MAX_ONNX_THREADS + 1,
@@ -578,7 +631,7 @@ mod tests {
 
     #[test]
     fn corrupted_setting_values_fall_back_to_defaults() {
-        let mut database = Database::open_in_memory().expect("in-memory database");
+        let database = Database::open_in_memory().expect("in-memory database");
         database
             .set_setting_string(SIMILARITY_WORKERS_SETTING, "not-a-number")
             .expect("write raw setting");

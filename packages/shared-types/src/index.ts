@@ -57,6 +57,8 @@ export type MessageType =
   | "system.open_url"
   | "cuda.status"
   | "cuda.install"
+  | "worker.environment.status"
+  | "worker.environment.install"
   | "model.inventory"
   | "model.activate"
   | "model.install"
@@ -154,6 +156,8 @@ export interface AppSettings {
   reference_matching_enabled: boolean;
   /** Similarity backend of that library: CCIP or the recognizer embedding. */
   reference_backend: "ccip" | "embedding";
+  /** Optional HTTP(S) proxy for model, CUDA and Hugging Face downloads. */
+  network_proxy: string;
 }
 
 export interface ComfyStatus {
@@ -470,6 +474,22 @@ export interface CudaRuntimeStatus {
 
 export interface CudaInstallProgress {
   phase: string;
+  current: number;
+  total: number;
+  message: string;
+}
+
+export interface WorkerEnvironmentStatus {
+  installed: boolean;
+  version?: string | null;
+  flavor: "cpu" | "gpu";
+  directory: string;
+  asset_name: string;
+  message: string;
+}
+
+export interface EnvironmentInstallProgress {
+  phase: "downloading" | "extracting" | "completed" | "error";
   current: number;
   total: number;
   message: string;

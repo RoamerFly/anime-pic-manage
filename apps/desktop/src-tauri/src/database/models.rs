@@ -41,6 +41,8 @@ pub const BACKGROUND_PRIORITY_SETTING: &str = "worker.background_priority";
 pub const REFERENCE_MATCHING_SETTING: &str = "recognition.reference_matching";
 /// Similarity backend for the reference library: `ccip` or `embedding`.
 pub const REFERENCE_BACKEND_SETTING: &str = "recognition.reference_backend";
+/// HTTP(S) proxy used by CUDA/model downloads and the AI Worker.
+pub const NETWORK_PROXY_SETTING: &str = "network.proxy";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ImageSimilarityFeatureRecord {

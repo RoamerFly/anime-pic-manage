@@ -14,7 +14,8 @@ param(
 
 # Builds the standard Windows installer (Tauri's NSIS bundle) from a portable
 # build. The installer contains the program and its Worker runtime, not the
-# models: 设置 → 模型配置 downloads those, and can import an existing cache.
+# models or the ~2.1 GB CUDA DLL set: NSIS cannot reliably mmap a payload that
+# large. CUDA is prepared from the settings page or shipped as a split archive.
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = "Stop"
@@ -33,12 +34,16 @@ if ([IO.Path]::GetFileName($Dist.TrimEnd('\')) -ne $DistName -or
 }
 
 $WorkerExe = Join-Path $Dist "app\runtime\ai-worker.exe"
+$FlavorMarker = Join-Path $Dist "BUILD_FLAVOR.txt"
 $DistResources = Join-Path $Dist "resources"
 if (-not (Test-Path -LiteralPath $WorkerExe -PathType Leaf)) {
     throw "Portable build not found at $Dist. Run build.bat or build_gpu.bat first."
 }
 if (-not (Test-Path -LiteralPath $DistResources -PathType Container)) {
     throw "Resources not found at $DistResources. Run build.bat or build_gpu.bat first."
+}
+if (-not (Test-Path -LiteralPath $FlavorMarker -PathType Leaf)) {
+    throw "Build flavor marker not found at $FlavorMarker. Rebuild the portable directory first."
 }
 
 $DesktopRoot = Join-Path $Root "apps\desktop"
@@ -50,14 +55,22 @@ if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
     throw "pnpm is required to build the installer."
 }
 
-Write-Host "[installer] Staging the payload (Worker runtime + resources)..."
+Write-Host "[installer] Staging the lightweight program payload (resources only)..."
 if (Test-Path -LiteralPath $PayloadRoot) {
     Remove-Item -LiteralPath $PayloadRoot -Recurse -Force
 }
-New-Item -ItemType Directory -Path (Join-Path $PayloadRoot "app") -Force | Out-Null
-Copy-Item -LiteralPath (Join-Path $Dist "app\runtime") `
-    -Destination (Join-Path $PayloadRoot "app\runtime") -Recurse -Force
+New-Item -ItemType Directory -Path $PayloadRoot -Force | Out-Null
+if ($Cuda) {
+    $cudaSource = Join-Path $Dist "app\cuda"
+    foreach ($requiredDll in @("cudart64_12.dll", "cublas64_12.dll", "cublasLt64_12.dll", "cudnn64_9.dll")) {
+        if (-not (Test-Path -LiteralPath (Join-Path $cudaSource $requiredDll) -PathType Leaf)) {
+            throw "GPU installer payload is missing $requiredDll. Rebuild dist_windows_gpu first."
+        }
+    }
+    Write-Host "[installer] CUDA runtime verified; keeping it as a split asset to stay below NSIS/GitHub limits."
+}
 Copy-Item -LiteralPath $DistResources -Destination (Join-Path $PayloadRoot "resources") -Recurse -Force
+Copy-Item -LiteralPath $FlavorMarker -Destination (Join-Path $PayloadRoot "BUILD_FLAVOR.txt") -Force
 
 # Updater artifacts are only produced when a signing key is available; a local
 # build without the key still produces a normal, working installer.
@@ -76,8 +89,8 @@ $overrides = @{
     bundle = @{
         createUpdaterArtifacts = $sign
         resources = @{
-            (Join-Path $PayloadRoot "app") = "app"
             (Join-Path $PayloadRoot "resources") = "resources"
+            (Join-Path $PayloadRoot "BUILD_FLAVOR.txt") = "BUILD_FLAVOR.txt"
         }
     }
 }
@@ -114,6 +127,10 @@ try {
     foreach ($installer in $installers) {
         $target = Join-Path $OutputRoot $installer.Name
         Copy-Item -LiteralPath $installer.FullName -Destination $target -Force
+        $signature = "$($installer.FullName).sig"
+        if (Test-Path -LiteralPath $signature -PathType Leaf) {
+            Copy-Item -LiteralPath $signature -Destination "$target.sig" -Force
+        }
         Write-Host ("[installer] {0} ({1:N1} MB)" -f $target, ((Get-Item -LiteralPath $target).Length / 1MB))
     }
     Write-Host "[installer] Output: $OutputRoot"

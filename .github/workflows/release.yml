@@ -6,8 +6,10 @@ name: Release (Windows installer + portable)
 #
 # 产物：
 #   * AnimePicManage-<版本>-windows-x64-setup.exe     标准 Windows 安装器（NSIS，含卸载选项）
-#   * AnimePicManage-<版本>-windows-x64-portable.zip  便携包（程序 + 运行时，不含模型）
+#   * AnimePicManage-<版本>-windows-x64-portable.zip  轻量程序包（不含运行时/模型）
+#   * AnimePicManage-<版本>-windows-x64-<cpu|gpu>-runtime.zip  独立 AI 运行环境
 #   * AnimePicManage-<版本>-windows-x64-models.zip    可选模型包（解压进便携包目录即可）
+#   * AnimePicManage-<版本>-windows-x64-gpu-cuda.zip GPU CUDA/cuDNN 分包
 #   * latest.json                                     应用内“检查更新”使用的清单
 
 on:
@@ -154,30 +156,73 @@ jobs:
           $installer = Get-ChildItem 'dist_windows/installer/*-setup.exe' | Select-Object -First 1
           Copy-Item $installer.FullName (Join-Path $assets "AnimePicManage-$version-windows-x64-setup.exe")
 
-          # 便携包拆成“程序 + 可选模型包”，避免单个压缩包超过 GitHub 2GB 的资产上限。
+          # 程序本体、AI 环境、模型与 CUDA 分层发布。应用更新只替换小程序包，
+          # 已安装环境由设置页按独立版本继续复用。
           $launcher = ([char]0x542F) + ([char]0x52A8) + '.bat'
           $guide = ([char]0x4F7F) + ([char]0x7528) + ([char]0x8BF4) + ([char]0x660E) + '.txt'
-          $portablePaths = @(
-            'dist_windows/app',
-            'dist_windows/resources',
-            'dist_windows/anime-pic-manage.exe',
-            (Join-Path 'dist_windows' $launcher),
-            (Join-Path 'dist_windows' $guide)
-          )
-          Compress-Archive -Path $portablePaths `
-            -DestinationPath (Join-Path $assets "AnimePicManage-$version-windows-x64-portable.zip") -CompressionLevel Optimal
-          Compress-Archive -Path 'dist_windows/models' `
-            -DestinationPath (Join-Path $assets "AnimePicManage-$version-windows-x64-models.zip") -CompressionLevel Optimal
+          $cpuPortable = Join-Path $assets "AnimePicManage-$version-windows-x64-portable.zip"
+          Push-Location 'dist_windows'
+          try {
+            & 7z a -tzip $cpuPortable 'resources' 'anime-pic-manage.exe' `
+              'BUILD_FLAVOR.txt' $launcher $guide | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw "CPU portable archive failed ($LASTEXITCODE)." }
+          } finally {
+            Pop-Location
+          }
+          $cpuRuntime = Join-Path $assets "AnimePicManage-$version-windows-x64-cpu-runtime.zip"
+          Push-Location 'dist_windows/app'
+          try {
+            & 7z a -tzip $cpuRuntime 'env' 'runtime' | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw "CPU runtime archive failed ($LASTEXITCODE)." }
+          } finally {
+            Pop-Location
+          }
+          $modelsArchive = Join-Path $assets "AnimePicManage-$version-windows-x64-models.zip"
+          Push-Location 'dist_windows'
+          try {
+            & 7z a -tzip $modelsArchive 'models' | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw "Models archive failed ($LASTEXITCODE)." }
+          } finally {
+            Pop-Location
+          }
 
           if ('${{ steps.meta.outputs.include_gpu }}' -eq 'true') {
             $gpuInstaller = Get-ChildItem 'dist_windows_gpu/installer/*-setup.exe' | Select-Object -First 1
             Copy-Item $gpuInstaller.FullName (Join-Path $assets "AnimePicManage-$version-windows-x64-gpu-setup.exe")
-            Compress-Archive -Path 'dist_windows_gpu/app', 'dist_windows_gpu/resources', 'dist_windows_gpu/anime-pic-manage.exe' `
-              -DestinationPath (Join-Path $assets "AnimePicManage-$version-windows-x64-gpu-portable.zip") -CompressionLevel Optimal
+            $gpuPortable = Join-Path $assets "AnimePicManage-$version-windows-x64-gpu-portable.zip"
+            $gpuRuntime = Join-Path $assets "AnimePicManage-$version-windows-x64-gpu-runtime.zip"
+            $gpuCuda = Join-Path $assets "AnimePicManage-$version-windows-x64-gpu-cuda.zip"
+            Push-Location 'dist_windows_gpu'
+            try {
+              & 7z a -tzip $gpuPortable 'resources' 'anime-pic-manage.exe' `
+                'BUILD_FLAVOR.txt' $launcher $guide | Out-Host
+              if ($LASTEXITCODE -ne 0) { throw "GPU portable archive failed ($LASTEXITCODE)." }
+              Push-Location 'app'
+              try {
+                & 7z a -tzip $gpuRuntime 'env' 'runtime' | Out-Host
+                if ($LASTEXITCODE -ne 0) { throw "GPU runtime archive failed ($LASTEXITCODE)." }
+              } finally {
+                Pop-Location
+              }
+              & 7z a -tzip $gpuCuda 'app/cuda' | Out-Host
+              if ($LASTEXITCODE -ne 0) { throw "GPU CUDA archive failed ($LASTEXITCODE)." }
+            } finally {
+              Pop-Location
+            }
+          }
+
+          # Managed environment downloads require a companion checksum. The
+          # app verifies it before extraction and keeps partial files for resume.
+          Get-ChildItem $assets -Filter '*-runtime.zip' | ForEach-Object {
+            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            [IO.File]::WriteAllText("$($_.FullName).sha256", "$hash  $($_.Name)`n", (New-Object Text.UTF8Encoding($false)))
           }
 
           # 应用内“检查更新”读取这个清单；签名文件由 Tauri 随安装器一起产出。
-          $signature = Get-ChildItem 'apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sig' | Select-Object -First 1
+          # The optional GPU installer is built after the CPU installer and
+          # reuses Tauri's bundle directory. Read the signature copied beside
+          # the CPU installer so latest.json can never embed the GPU signature.
+          $signature = Get-ChildItem 'dist_windows/installer/*-setup.exe.sig' | Select-Object -First 1
           $downloadUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/${{ steps.meta.outputs.tag }}/AnimePicManage-$version-windows-x64-setup.exe"
           $manifest = [ordered]@{
             version = $version
@@ -187,7 +232,10 @@ jobs:
           }
           $manifest | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $assets 'latest.json') -Encoding utf8
 
-          Get-ChildItem $assets | ForEach-Object { Write-Output ("{0}  {1:N1} MB" -f $_.Name, ($_.Length / 1MB)) }
+          Get-ChildItem $assets | ForEach-Object {
+            if ($_.Length -ge 2GB) { throw "Release asset exceeds 2GB: $($_.Name)" }
+            Write-Output ("{0}  {1:N1} MB" -f $_.Name, ($_.Length / 1MB))
+          }
 
       - name: Publish the GitHub Release
         if: ${{ steps.meta.outputs.publish == 'true' }}
@@ -201,12 +249,13 @@ jobs:
 
           - 发布标准 Windows 安装器与便携包。
           - 安装器会自动沿用上次的安装目录；卸载时可选择是否删除缓存、模型与训练产物。
-          - 便携包拆分为“程序包 + 可选模型包”，解压到同一目录即可离线使用。
+          - 程序本体、AI 运行环境、模型和 CUDA 分层发布；小版本更新不会重复下载大型环境。
 
           ## 下载建议
 
-          - 只想装完就用：下载 `*-setup.exe`，模型可在“设置 → 模型配置”里按需下载。
-          - 需要整包带走：下载 `*-portable.zip` 与 `*-models.zip`，解压到同一文件夹。
+          - 日常安装：下载 `*-setup.exe`，首次打开后在“设置 → 基础配置”准备 AI 环境与 CUDA。
+          - 离线便携：下载 `*-portable.zip`、匹配的 `*-runtime.zip` 与 `*-models.zip`，解压到同一文件夹。
+          - NVIDIA 显卡版：另下载 `*-gpu-cuda.zip`；安装器不内嵌 2.1GB CUDA，以避免安装器格式与平台单文件上限。
           '@
           if (-not (gh release view $tag 2>$null)) {
             gh release create $tag --title $tag --notes $notes
