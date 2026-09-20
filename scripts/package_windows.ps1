@@ -402,6 +402,9 @@ New-Item -ItemType Directory -Path (Join-Path $Dist "output\generated") -Force |
 New-Item -ItemType Directory -Path (Join-Path $Dist "output\loras") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $Dist "output\datasets") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $Dist "temp") -Force | Out-Null
+# Pre-create the pinned Hugging Face cache so the layout shows where the tagging
+# and reference models will land instead of appearing out of nowhere later.
+New-Item -ItemType Directory -Path (Join-Path $Dist "data\hf-cache") -Force | Out-Null
 $launcherName = ([char]0x542F) + ([char]0x52A8) + ".bat"                   # 启动.bat
 $guideName = ([char]0x4F7F) + ([char]0x7528) + ([char]0x8BF4) + ([char]0x660E) + ".txt"  # 使用说明.txt
 foreach ($file in @($launcherName, $guideName)) {
