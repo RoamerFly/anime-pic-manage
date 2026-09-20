@@ -20,8 +20,10 @@ shift
 goto parse_args
 
 :args_done
-if not exist "dist_windows_gpu\runtime\ai-worker.exe" goto missing_gpu_build
-if not exist "dist_windows_gpu\env\Scripts\python.exe" goto missing_gpu_build
+rem The portable layout keeps the program under app\ so a novice only sees the
+rem entry-point files at the package root.
+if not exist "dist_windows_gpu\app\runtime\ai-worker.exe" goto missing_gpu_build
+if not exist "dist_windows_gpu\app\env\Scripts\python.exe" goto missing_gpu_build
 
 echo [1/5] Checking local toolchain...
 where node >nul 2>&1
