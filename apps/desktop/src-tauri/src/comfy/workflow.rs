@@ -266,7 +266,10 @@ mod tests {
         assert_eq!(built["5"]["inputs"]["width"], 1024);
         assert_eq!(built["5"]["inputs"]["batch_size"], 2);
         assert_eq!(built["9"]["inputs"]["filename_prefix"], "anime");
-        assert_eq!(built["10"]["inputs"]["lora_name"], "character_alpha.safetensors");
+        assert_eq!(
+            built["10"]["inputs"]["lora_name"],
+            "character_alpha.safetensors"
+        );
         assert_eq!(built["10"]["inputs"]["strength_model"], 0.8);
         assert_eq!(built["10"]["mode"], 0);
     }

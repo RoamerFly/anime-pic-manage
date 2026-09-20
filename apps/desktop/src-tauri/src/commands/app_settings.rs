@@ -49,8 +49,8 @@ pub fn update_app_settings(
         }
     };
 
-    if let Ok(database) = state.database.lock() {
-        if let Err(error) = save_app_settings(&database, &settings) {
+    if let Ok(mut database) = state.database.lock() {
+        if let Err(error) = save_app_settings(&mut database, &settings) {
             return failure(
                 "settings.update",
                 request_id.clone(),

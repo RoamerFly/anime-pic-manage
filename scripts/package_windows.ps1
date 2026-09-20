@@ -53,10 +53,33 @@ if ($ReuseEnvironment) {
     if (-not $existing.PSIsContainer) {
         throw "Refusing to remove $DistName because it is not a directory."
     }
+    # A full rebuild must never destroy user data: the SQLite database,
+    # scan results and generated output are moved aside and restored below.
+    $PreservedRoot = Join-Path $Root ".dist-preserved"
+    if (Test-Path -LiteralPath $PreservedRoot) {
+        Remove-Item -LiteralPath $PreservedRoot -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $PreservedRoot -Force | Out-Null
+    foreach ($name in @("data", "output")) {
+        $source = Join-Path $Dist $name
+        if (Test-Path -LiteralPath $source) {
+            Move-Item -LiteralPath $source -Destination (Join-Path $PreservedRoot $name) -Force
+        }
+    }
     Remove-Item -LiteralPath $Dist -Recurse -Force
 }
 if (-not (Test-Path -LiteralPath $Dist)) {
     New-Item -ItemType Directory -Path $Dist | Out-Null
+}
+if (Test-Path -LiteralPath (Join-Path $Root ".dist-preserved")) {
+    foreach ($name in @("data", "output")) {
+        $preserved = Join-Path (Join-Path $Root ".dist-preserved") $name
+        if (Test-Path -LiteralPath $preserved) {
+            Move-Item -LiteralPath $preserved -Destination (Join-Path $Dist $name) -Force
+            Write-Host "[portable] Restored existing $name\ into $DistName."
+        }
+    }
+    Remove-Item -LiteralPath (Join-Path $Root ".dist-preserved") -Recurse -Force
 }
 
 $DesktopExe = Join-Path $Root "apps\desktop\src-tauri\target\release\anime-pic-manage.exe"

@@ -385,11 +385,11 @@ pub async fn install_cuda_runtime(
     let directory = target.to_string_lossy().into_owned();
     {
         let state = app.state::<AppState>();
-        if let Ok(database) = state.database.lock() {
+        if let Ok(mut database) = state.database.lock() {
             let mut settings =
                 crate::app_settings::load_app_settings(&database).unwrap_or_default();
             settings.cuda_runtime_dir = directory.clone();
-            if let Err(error) = crate::app_settings::save_app_settings(&database, &settings) {
+            if let Err(error) = crate::app_settings::save_app_settings(&mut database, &settings) {
                 return failure(
                     "cuda.install",
                     request_id.clone(),

@@ -1999,6 +1999,9 @@ export function SettingsPage({
         if (!active) return;
         if (response.payload) {
           setSettings(response.payload);
+          // Keep the dirty baseline in sync, otherwise the page looks
+          // "unsaved" forever and a mismatched baseline hides real edits.
+          setSavedSettings(response.payload);
           setSettingsError(null);
         } else if (response.error) {
           setSettingsError(

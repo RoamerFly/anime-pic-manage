@@ -332,7 +332,12 @@ pub fn load_app_settings(database: &Database) -> Result<AppSettings, String> {
     .or(Ok(defaults))
 }
 
-pub fn save_app_settings(database: &Database, settings: &AppSettings) -> Result<(), String> {
+/// Persist every setting in one transaction.
+///
+/// Writing row by row used to leave a half-saved state when anything aborted
+/// mid-way (which is exactly how a database ended up with only the first seven
+/// keys and no `comfy.*` rows at all).
+pub fn save_app_settings(database: &mut Database, settings: &AppSettings) -> Result<(), String> {
     let settings = settings.clone().validated()?;
     let entries: [(&str, String); 21] = [
         (
@@ -405,12 +410,25 @@ pub fn save_app_settings(database: &Database, settings: &AppSettings) -> Result<
             settings.reference_backend.clone(),
         ),
     ];
+    let transaction = database
+        .connection
+        .transaction()
+        .map_err(|error| error.to_string())?;
     for (key, value) in entries {
-        database
-            .set_setting_string(key, &value)
+        let value_json = serde_json::to_string(&value).map_err(|error| error.to_string())?;
+        transaction
+            .execute(
+                "INSERT INTO settings(key, value_json, value_version, updated_at)
+                 VALUES (?1, ?2, 1, CURRENT_TIMESTAMP)
+                 ON CONFLICT(key) DO UPDATE SET
+                     value_json = excluded.value_json,
+                     value_version = settings.value_version + 1,
+                     updated_at = CURRENT_TIMESTAMP",
+                rusqlite::params![key, value_json],
+            )
             .map_err(|error| error.to_string())?;
     }
-    Ok(())
+    transaction.commit().map_err(|error| error.to_string())
 }
 
 #[cfg(test)]
@@ -418,8 +436,50 @@ mod tests {
     use super::*;
 
     #[test]
+    fn saving_writes_every_key_in_one_go() {
+        let mut database = Database::open_in_memory().expect("in-memory database");
+        let settings = AppSettings {
+            comfy_root: "E:/ComfyUI-aki-v3".to_string(),
+            comfy_port: 8199,
+            reference_backend: "embedding".to_string(),
+            ..AppSettings::default()
+        };
+
+        save_app_settings(&mut database, &settings).expect("save settings");
+
+        // A row-by-row save used to leave a half-written settings table (only
+        // the first few keys landed), which silently dropped `comfy.*`.
+        assert_eq!(
+            database
+                .get_setting_string(COMFY_ROOT_SETTING)
+                .unwrap()
+                .as_deref(),
+            Some("E:/ComfyUI-aki-v3")
+        );
+        assert_eq!(
+            database
+                .get_setting_string(COMFY_PORT_SETTING)
+                .unwrap()
+                .as_deref(),
+            Some("8199")
+        );
+        assert_eq!(
+            database
+                .get_setting_string(REFERENCE_BACKEND_SETTING)
+                .unwrap()
+                .as_deref(),
+            Some("embedding")
+        );
+        let stored: i64 = database
+            .connection
+            .query_row("SELECT COUNT(*) FROM settings", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(stored, 21, "every setting must be persisted");
+    }
+
+    #[test]
     fn settings_round_trip_through_the_settings_table() {
-        let database = Database::open_in_memory().expect("in-memory database");
+        let mut database = Database::open_in_memory().expect("in-memory database");
         let defaults = AppSettings::default();
         assert_eq!(
             load_app_settings(&database).expect("load defaults"),
@@ -449,14 +509,14 @@ mod tests {
             reference_matching_enabled: true,
             reference_backend: "ccip".to_string(),
         };
-        save_app_settings(&database, &custom).expect("save settings");
+        save_app_settings(&mut database, &custom).expect("save settings");
 
         assert_eq!(load_app_settings(&database).expect("reload"), custom);
     }
 
     #[test]
     fn comfy_settings_round_trip_and_validate() {
-        let database = Database::open_in_memory().expect("in-memory database");
+        let mut database = Database::open_in_memory().expect("in-memory database");
         let custom = AppSettings {
             comfy_root: "  E:/freetime/AI_Draw/ComfyUI-aki/ComfyUI-aki-v3  ".to_string(),
             comfy_port: 8188,
@@ -465,7 +525,7 @@ mod tests {
             comfy_output_dir: "  E:/generated  ".to_string(),
             ..AppSettings::default()
         };
-        save_app_settings(&database, &custom).expect("save comfy settings");
+        save_app_settings(&mut database, &custom).expect("save comfy settings");
 
         let loaded = load_app_settings(&database).expect("reload");
 
@@ -518,7 +578,7 @@ mod tests {
 
     #[test]
     fn corrupted_setting_values_fall_back_to_defaults() {
-        let database = Database::open_in_memory().expect("in-memory database");
+        let mut database = Database::open_in_memory().expect("in-memory database");
         database
             .set_setting_string(SIMILARITY_WORKERS_SETTING, "not-a-number")
             .expect("write raw setting");

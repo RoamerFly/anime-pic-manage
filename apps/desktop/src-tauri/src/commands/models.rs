@@ -172,11 +172,11 @@ pub fn set_active_recognizer(
     let trimmed = model_id.trim().to_string();
     let state = app.state::<AppState>();
     let saved = match state.database.lock() {
-        Ok(database) => {
+        Ok(mut database) => {
             let mut settings =
                 crate::app_settings::load_app_settings(&database).unwrap_or_default();
             settings.recognition_recognizer_model = trimmed.clone();
-            crate::app_settings::save_app_settings(&database, &settings)
+            crate::app_settings::save_app_settings(&mut database, &settings)
         }
         Err(_) => Err("本地数据库状态锁暂时不可用。".to_string()),
     };

@@ -298,11 +298,11 @@ pub async fn build_reference_library(
             ),
         );
     }
-    if let Ok(database) = state.database.lock() {
+    if let Ok(mut database) = state.database.lock() {
         let mut settings = crate::app_settings::load_app_settings(&database).unwrap_or_default();
         settings.reference_backend = backend.clone();
         settings.reference_matching_enabled = true;
-        if let Err(error) = crate::app_settings::save_app_settings(&database, &settings) {
+        if let Err(error) = crate::app_settings::save_app_settings(&mut database, &settings) {
             return failure(
                 "reference.build",
                 request_id.clone(),
