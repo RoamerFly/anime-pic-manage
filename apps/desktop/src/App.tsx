@@ -678,6 +678,9 @@ function App() {
             {location.pathname === "/" && (
               <p className="topbar-subtitle">管理本地动漫图片，从这里开始</p>
             )}
+            {recognitionPaths.has(location.pathname) && (
+              <p className="topbar-subtitle">识别、复核并校正图片中的动漫角色</p>
+            )}
           </div>
           <div className="topbar-actions">
             {location.pathname === "/settings" && settingsSave.available && (
