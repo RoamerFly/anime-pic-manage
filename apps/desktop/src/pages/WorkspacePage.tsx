@@ -2,11 +2,13 @@ import {
   AlertCircle,
   ChevronRight,
   Clock3,
+  Cpu,
+  Database,
   FolderOpen,
   Play,
   ScanSearch,
   Trash2,
-  WandSparkles,
+  UserRound,
   X,
 } from "lucide-react";
 import type { WorkerStatus } from "@anime-pic-manage/shared-types";
@@ -64,61 +66,60 @@ export function WorkspacePage({
         className="workspace-overview workspace-dashboard-overview"
         aria-labelledby="workspace-overview-title"
       >
-        <div className="workspace-overview-copy">
-          <div className="tag">
-            <WandSparkles size={14} />
-            本地工作流 · 安全可复核
-          </div>
-          <h2 id="workspace-overview-title">图片工作台</h2>
-          <p>
-            选择图库后，从角色识别或相似计算开始。结果只在本机处理，原图不会被自动移动、改名或删除。
-          </p>
-          <button
-            className="ghost-button"
-            onClick={onChooseLibrary}
-            disabled={active}
-            title={active ? "扫描进行中，请先终止任务或等待完成" : undefined}
-          >
-            <FolderOpen size={16} />
-            {library ? "切换图库" : "选择图库"}
-          </button>
-        </div>
-        <div className="workspace-overview-stats" aria-label="工作台状态">
-          <div>
-            <span>当前图库</span>
-            <strong>{library?.display_name ?? "尚未选择"}</strong>
+        <div className="workspace-library-identity">
+          <span className="workspace-card-icon">
+            <FolderOpen size={27} />
+          </span>
+          <div className="workspace-library-copy">
+            <h2 id="workspace-overview-title">图库与环境</h2>
+            <strong>{library?.display_name ?? "尚未选择图库"}</strong>
             <small>
               {library?.path ? normalizeDisplayPath(library.path) : "选择目录后开始"}
             </small>
           </div>
-          <div>
-            <span>推理引擎</span>
-            <strong>{loading ? "检查中" : workerLabel(workerStatus)}</strong>
-            <small>{status?.worker.message ?? "等待桌面核心响应"}</small>
+        </div>
+        <div className="workspace-environment-status" aria-label="工作台状态">
+          <div className="workspace-status-item">
+            <span className="workspace-status-icon"><Cpu size={21} /></span>
+            <span>
+              <small>推理引擎</small>
+              <strong>{loading ? "检查中" : workerLabel(workerStatus)}</strong>
+            </span>
           </div>
-          <div>
-            <span>数据库</span>
-            <strong>
-              {loading
-                ? "检查中"
-                : status?.database.status === "ready"
-                  ? "已就绪"
-                  : "需检查"}
-            </strong>
-            <small>{status?.database.message ?? "等待桌面核心响应"}</small>
+          <div className="workspace-status-item">
+            <span className="workspace-status-icon"><Database size={21} /></span>
+            <span>
+              <small>数据库</small>
+              <strong>
+                {loading
+                  ? "检查中"
+                  : status?.database.status === "ready"
+                    ? "已就绪"
+                    : "需检查"}
+              </strong>
+            </span>
           </div>
         </div>
+        <button
+          className="primary-button workspace-library-button"
+          onClick={onChooseLibrary}
+          disabled={active}
+          title={active ? "扫描进行中，请先终止任务或等待完成" : undefined}
+        >
+          <FolderOpen size={16} />
+          {library ? "切换图库" : "选择图库"}
+        </button>
       </section>
 
       <section
-        className="workspace-task-grid"
+        className="workspace-scan-control panel-card"
         aria-labelledby="workspace-quick-start-title"
       >
-        <div className="workspace-scan-control panel-card">
-          <div className="panel-header">
+          <div className="panel-header workspace-scan-header">
+            <span className="workspace-card-icon compact"><UserRound size={23} /></span>
             <div>
               <div className="eyebrow">ROLE RECOGNITION</div>
-              <h3 id="workspace-quick-start-title">角色识别</h3>
+              <h3 id="workspace-quick-start-title">角色识别任务</h3>
             </div>
             <span
               className={`soft-badge ${
@@ -228,27 +229,13 @@ export function WorkspacePage({
               {controller.error}
             </div>
           )}
-        </div>
-
-        <button
-          className="quick-start-card similarity"
-          onClick={() => onNavigate("/similarity")}
-        >
-          <span className="quick-start-icon">
-            <ScanSearch size={19} />
-          </span>
-          <span>
-            <strong>相似图片分析</strong>
-            <small>感知哈希与特征聚类 · 自动去重治理</small>
-          </span>
-          <ChevronRight size={17} />
-        </button>
       </section>
 
-      <section
-        className="workspace-recent panel-card"
-        aria-labelledby="workspace-recent-title"
-      >
+      <div className="workspace-bottom-grid">
+        <section
+          className="workspace-recent panel-card"
+          aria-labelledby="workspace-recent-title"
+        >
         <div className="panel-header">
           <div>
             <div className="eyebrow">RECENT ACTIVITY</div>
@@ -315,7 +302,25 @@ export function WorkspacePage({
             </span>
           </div>
         )}
-      </section>
+        </section>
+
+        <button
+          className="quick-start-card similarity"
+          onClick={() => onNavigate("/similarity")}
+        >
+          <span className="quick-start-icon">
+            <ScanSearch size={25} />
+          </span>
+          <span>
+            <strong>相似图片分析</strong>
+            <small>感知哈希与特征聚类，发现相似的图片内容。</small>
+          </span>
+          <span className="quick-start-action">
+            进入相似计算
+            <ChevronRight size={17} />
+          </span>
+        </button>
+      </div>
     </div>
   );
 }

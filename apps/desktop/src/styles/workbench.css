@@ -3343,3 +3343,77 @@ to {
   background:#fee2e2;
   color:#b91c1c;
 }
+/* Recognition workbench refresh: proposal C mint glass layout. */
+.main-content:has(.recognition-page) { padding-top: 0; padding-bottom: 22px; }
+.main-content:has(.recognition-page) .topbar { padding: 0 0 18px; margin: 0; }
+.main-content:has(.recognition-page) .topbar h1 { margin: 0; color: #123e2e; font-size: clamp(25px, 2.2vw, 34px); letter-spacing: -.04em; }
+.main-content:has(.recognition-page) .topbar-subtitle { display: block; margin-top: 5px; color: #668b7a; font-size: 13px; }
+.recognition-page { gap: 12px; }
+.recognition-tabs { display: flex; width: fit-content; max-width: 100%; min-height: 50px; padding: 5px; gap: 4px; border: 1px solid rgba(87,181,139,.18); border-radius: 16px; background: rgba(255,255,255,.56); box-shadow: 0 10px 26px rgba(26,116,77,.06); backdrop-filter: blur(16px); }
+.recognition-tabs .workspace-tab { min-height: 39px; padding: 0 22px; border: 0; border-radius: 11px; color: #628577; font-size: 13px; font-weight: 700; }
+.recognition-tabs .workspace-tab:hover { color: #126f4b; background: rgba(230,249,239,.72); }
+.recognition-tabs .workspace-tab.active { color: #fff; background: linear-gradient(135deg,#1c9c67,#08764b); box-shadow: 0 7px 16px rgba(19,135,87,.2); }
+.classification-page { gap: 12px; }
+.classification-page .library-toolbar { display: grid; grid-template-columns: minmax(260px,1.1fr) minmax(0,2fr); align-items: center; gap: 18px; min-height: 78px; padding: 14px 18px; border: 1px solid rgba(87,181,139,.18); border-radius: 18px; background: rgba(255,255,255,.66); box-shadow: 0 12px 32px rgba(26,116,77,.07); backdrop-filter: blur(18px) saturate(125%); }
+.classification-page .library-identity { gap: 12px; }
+.classification-page .toolbar-icon { width: 46px; height: 46px; flex-basis: 46px; border-radius: 50%; color: #16835b; background: #ddf7e9; }
+.classification-page .library-identity strong { color: #165c42; font-size: 16px; }
+.classification-page .library-identity small { margin-top: 3px; color: #789586; font-size: 11px; }
+.classification-page .toolbar-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.classification-page .model-selector-container { min-height: 38px; padding: 0 10px; color: #247453; border: 1px solid rgba(68,166,119,.2); border-radius: 10px; background: rgba(238,252,244,.8); }
+.classification-page .model-select-dropdown { height: 36px; color: #23634a; background: transparent; }
+.classification-page .skip-annotated-label { min-height: 34px; padding: 0 8px; color: #668577; border-radius: 9px; background: rgba(229,247,237,.65); font-size: 11px; }
+.classification-page .toolbar-actions .ghost-button, .classification-page .toolbar-actions .primary-button { min-height: 38px; padding: 0 13px; border-radius: 10px; font-size: 11px; }
+.classification-page .toolbar-actions .primary-button { min-width: 112px; }
+.classification-page .workbench-notice, .classification-page .scan-progress { border-radius: 13px; }
+.classification-page .scan-progress { padding: 14px 18px; border: 1px solid rgba(79,177,127,.2); background: rgba(243,253,247,.82); }
+.classification-page .scan-progress-header h3 { color: #176e4c; font-size: 13px; }
+.classification-page .scan-progress-header > strong { color: #16835b; }
+.classification-page .scan-progress .progress-track { height: 8px; border-radius: 999px; background: #d9f1e4; }
+.classification-page .scan-progress .progress-bar { border-radius: inherit; background: linear-gradient(90deg,#20a66b,#75d4a0); }
+.classification-page .workbench-layout-unified { display: grid; grid-template-columns: minmax(0,2.05fr) minmax(340px,.95fr); grid-template-rows: minmax(0,1fr) auto; gap: 12px; align-items: stretch; min-height: 0; }
+.classification-page .workbench-main-col { grid-column: 1; grid-row: 1; min-height: 0; gap: 0; }
+.classification-page .annotation-canvas-wrapper { min-height: 450px; border: 1px solid rgba(72,168,117,.2); border-radius: 18px; background: rgba(255,255,255,.76); box-shadow: 0 12px 32px rgba(26,116,77,.08); }
+.classification-page .canvas-header-bar { min-height: 58px; padding: 10px 16px; color: #205b45; border-bottom: 1px solid rgba(66,165,113,.14); background: rgba(255,255,255,.76); }
+.classification-page .canvas-stats { color: #205b45; }
+.classification-page .canvas-stats strong { color: #164b37; }
+.classification-page .canvas-tool-btn, .classification-page .canvas-mode-btn { min-height: 32px; color: #267451; border: 1px solid rgba(68,166,119,.2); border-radius: 9px; background: rgba(226,248,236,.76); }
+.classification-page .canvas-tool-btn:hover, .classification-page .canvas-mode-btn:hover, .classification-page .canvas-tool-btn.active, .classification-page .canvas-mode-btn.active { color: #fff; border-color: #1b9b65; background: #1b9b65; }
+.classification-page .canvas-viewport { height: clamp(390px,52vh,540px); background: linear-gradient(145deg,#e9f7f0,#f7fcf9); }
+.classification-page .canvas-nav-arrow { width: 34px; height: 52px; color: #267451; border-color: rgba(68,166,119,.2); border-radius: 10px; background: rgba(255,255,255,.72); box-shadow: 0 5px 14px rgba(26,116,77,.08); opacity: .9; }
+.classification-page .canvas-nav-arrow:hover:not(:disabled) { color: #fff; background: #1b9b65; }
+.classification-page .canvas-footer-legend { min-height: 36px; padding: 7px 16px; color: #749184; border-top-color: rgba(66,165,113,.14); background: rgba(255,255,255,.76); }
+.classification-page .canvas-hotkeys-hint { color: #91a89d; }
+.classification-page .canvas-detection-box { border-color: #16a566; box-shadow: 0 0 0 1px rgba(255,255,255,.7) inset; }
+.classification-page .canvas-detection-box .detection-box-label { padding: 4px 8px; border-radius: 8px 8px 0 0; background: #13935c; font-size: 10px; }
+.classification-page .canvas-detection-box.review { border-color: #e0a147; }
+.classification-page .canvas-detection-box.review .detection-box-label { background: #d28c33; }
+.classification-page .unified-inspector { display: contents; max-height: none; overflow: visible; border: 0; background: transparent; }
+.classification-page .unified-inspector-content { grid-column: 2; grid-row: 1; min-width: 0; max-height: clamp(450px,52vh,540px); overflow-y: auto; padding: 18px; border: 1px solid rgba(72,168,117,.2); border-radius: 18px; background: rgba(255,255,255,.78); box-shadow: 0 12px 32px rgba(26,116,77,.08); }
+.classification-page .inspector-filmstrip { grid-column: 1 / -1; grid-row: 2; min-width: 0; }
+.classification-page .inspector-filmstrip .filmstrip-container { min-height: 138px; padding: 14px 16px; border: 1px solid rgba(72,168,117,.2); border-radius: 18px; background: rgba(255,255,255,.78); box-shadow: 0 12px 32px rgba(26,116,77,.07); }
+.classification-page .inspector-filmstrip .filmstrip-header { min-height: 28px; }
+.classification-page .inspector-filmstrip .filmstrip-header-meta strong { color: #175f44; font-size: 13px; }
+.classification-page .inspector-filmstrip .filmstrip-scroll-area { padding-bottom: 1px; }
+.classification-page .inspector-filmstrip .filmstrip-thumb-card { width: 118px; border-color: rgba(71,164,112,.16); border-radius: 10px; background: rgba(242,252,246,.82); }
+.classification-page .inspector-filmstrip .filmstrip-thumb-card.selected { border-color: #1caf6f; box-shadow: 0 0 0 2px rgba(28,175,111,.2); }
+.classification-page .inspector-filmstrip .filmstrip-thumb-media { height: 68px; }
+.classification-page .inspector-filmstrip .filmstrip-thumb-name { color: #376a55; }
+.classification-page .inspector-filmstrip .filmstrip-thumb-people { color: #82a091; }
+.classification-page .inspector-filmstrip .filmstrip-delete-btn { color: #a35e62 !important; }
+.classification-page .inspector-top-header h3 { color: #164b37; font-size: 18px; }
+.classification-page .inspector-top-header .eyebrow, .classification-page .inspector-subheading, .classification-page .inspector-field-group span, .classification-page .inspector-bbox-info, .classification-page .inspector-model-badge small { color: #7d998b; }
+.classification-page .filter-tabs { gap: 5px; margin: 16px 0; padding: 4px; border-radius: 11px; background: #eef9f2; }
+.classification-page .filter-tab { min-height: 32px; padding: 0 9px; color: #668b79; border-radius: 8px; font-size: 10px; }
+.classification-page .filter-tab.active { color: #fff; background: #1b9b65; box-shadow: 0 5px 12px rgba(28,155,101,.18); }
+.classification-page .inspector-person-pill { border-color: rgba(72,168,117,.17); border-radius: 10px; background: #f1fbf5; }
+.classification-page .inspector-person-pill.selected { color: #176c4a; border-color: #2db276; background: #ddf7e9; }
+.classification-page .inspector-candidate-row { min-height: 34px; border-color: rgba(72,168,117,.15); border-radius: 8px; background: rgba(247,253,249,.9); }
+.classification-page .inspector-candidate-row:hover, .classification-page .inspector-candidate-row.assigned { border-color: #70c99a; background: #e7f9ed; }
+.classification-page .inspector-candidate-row .candidate-score, .classification-page .inspector-candidate-row.assigned .candidate-score { color: #17865a; }
+.classification-page .inspector-footer-model { margin-top: 18px; padding-top: 14px; border-top-color: rgba(72,168,117,.14); }
+.classification-page .inspector-model-badge { color: #236b4d; }
+.classification-page .inspector-model-badge svg { color: #1aa369; }
+@media (max-width: 1220px) { .classification-page .library-toolbar { grid-template-columns: 1fr; } .classification-page .toolbar-actions { justify-content: flex-start; } .classification-page .workbench-layout-unified { grid-template-columns: minmax(0,1.55fr) minmax(310px,1fr); } }
+@media (max-width: 900px) { .classification-page .workbench-layout-unified { grid-template-columns: 1fr; grid-template-rows: auto auto auto; } .classification-page .workbench-main-col, .classification-page .unified-inspector-content, .classification-page .inspector-filmstrip { grid-column: 1; } .classification-page .workbench-main-col { grid-row: 1; } .classification-page .unified-inspector-content { grid-row: 2; max-height: none; } .classification-page .inspector-filmstrip { grid-row: 3; } }
+@media (max-width: 640px) { .recognition-tabs { width: 100%; overflow-x: auto; } .recognition-tabs .workspace-tab { flex: 1 0 auto; padding: 0 14px; } .classification-page .toolbar-actions { justify-content: flex-start; } .classification-page .toolbar-actions > * { flex: 1 1 auto; } .classification-page .canvas-viewport { height: min(70vh,420px); } .classification-page .annotation-canvas-wrapper, .classification-page .unified-inspector-content, .classification-page .inspector-filmstrip .filmstrip-container { border-radius: 14px; } }
