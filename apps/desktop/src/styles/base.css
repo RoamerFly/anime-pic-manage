@@ -5,8 +5,8 @@ h1, h2, h3, p {
 }
 
 h1 {
-  color: #172035;
-  font-size: calc(18 * var(--ui-font-step, 1px));
+  color: var(--mint-ink);
+  font-size: calc(26 * var(--ui-font-step, 1px));
   letter-spacing: -.02em;
   line-height: 1.2;
   font-weight: 700;
@@ -92,7 +92,7 @@ h3 {
   gap: 8px;
   min-height: 38px;
   padding: 0 15px;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: calc(12 * var(--ui-font-step, 1px));
   font-weight: 700;
   transition: all .17s ease;
@@ -100,13 +100,13 @@ h3 {
 
 .primary-button {
   color: white;
-  border: 1px solid #6675e4;
-  background: #6877df;
-  box-shadow: 0 7px 14px #6472dc2b;
+  border: 1px solid #138b5b;
+  background: linear-gradient(135deg, #18a86c, #0c8a56);
+  box-shadow: 0 8px 18px rgba(15, 143, 89, .2);
 }
 
 .primary-button:hover {
-  background: #5565d3;
+  background: linear-gradient(135deg, #22b477, #08784b);
   transform: translateY(-1px);
 }
 
@@ -118,15 +118,15 @@ h3 {
 }
 
 .ghost-button {
-  color: #606e86;
-  border: 1px solid #dde3ef;
-  background: #fff;
+  color: #536f67;
+  border: 1px solid var(--mint-line);
+  background: rgba(255, 255, 255, .58);
 }
 
 .ghost-button:hover {
-  color: #5364d8;
-  border-color: #bcc5f1;
-  background: #fbfcff;
+  color: var(--mint-primary-dark);
+  border-color: var(--mint-line-strong);
+  background: rgba(235, 251, 241, .88);
 }
 
 .danger-button {
@@ -144,15 +144,15 @@ h3 {
   height: 34px;
   display: grid;
   place-items: center;
-  border: 1px solid #e1e6ef;
+  border: 1px solid var(--mint-line);
   border-radius: 9px;
-  color: #6b778e;
-  background: #fff;
+  color: #5d786f;
+  background: rgba(255, 255, 255, .56);
 }
 
 .icon-button:hover {
-  color: #5364d8;
-  border-color: #bac3f5;
+  color: var(--mint-primary-dark);
+  border-color: var(--mint-line-strong);
 }
 
 .selected-path {
@@ -214,13 +214,13 @@ h3 {
 }
 
 .soft-badge.green {
-  color: #4e9b74;
-  background: #eaf8ef;
+  color: var(--mint-primary-dark);
+  background: var(--mint-soft);
 }
 
 .soft-badge.blue {
-  color: #6481c9;
-  background: #edf2ff;
+  color: #348767;
+  background: #e7f5ec;
 }
 
 .status-badge {

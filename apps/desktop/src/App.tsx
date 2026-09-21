@@ -21,7 +21,6 @@ import {
   Save,
   ScanSearch,
   Settings as SettingsIcon,
-  Sparkles,
   UsersRound,
 } from "lucide-react";
 import type {
@@ -624,12 +623,9 @@ function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">
-            <Sparkles size={18} />
-          </div>
           <div>
-            <div className="brand-title">Anime Pic</div>
-            <div className="brand-subtitle">本地图片工作台</div>
+            <div className="brand-title">Anime Pic Manage</div>
+            <div className="brand-subtitle">让图片更有条理</div>
           </div>
         </div>
         <nav className="nav-list" aria-label="主导航">
@@ -659,7 +655,7 @@ function App() {
         <div className="sidebar-footer">
           <div className="privacy-note">
             <Info size={15} />
-            <span>图片只在本机处理</span>
+            <span>本地管理 · AI 助力</span>
           </div>
           <a
             className="sidebar-link"
@@ -679,6 +675,9 @@ function App() {
           <div>
             <div className="eyebrow">工作台 / {pageTitle}</div>
             <h1>{pageTitle}</h1>
+            {location.pathname === "/" && (
+              <p className="topbar-subtitle">管理本地动漫图片，从这里开始</p>
+            )}
           </div>
           <div className="topbar-actions">
             {location.pathname === "/settings" && settingsSave.available && (

@@ -1,13 +1,23 @@
 /* Design tokens, reset, and shared keyframe animations */
 :root {
   font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
-  color: #172035;
-  background: #f4f7fb;
+  color: #17372f;
+  background: #edf8f2;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   /* Every font-size declaration is expressed as `calc(N * var(--ui-font-step))`,
      so the settings page can scale all UI text smoothly (0.5px steps). */
   --ui-font-step: 1px;
+  --mint-ink: #17372f;
+  --mint-text: #526f67;
+  --mint-muted: #7d968e;
+  --mint-primary: #10955f;
+  --mint-primary-dark: #08784b;
+  --mint-soft: #e1f6e9;
+  --mint-line: rgba(42, 137, 96, .16);
+  --mint-line-strong: rgba(35, 133, 89, .28);
+  --mint-glass: rgba(255, 255, 255, .7);
+  --mint-shadow: 0 16px 38px rgba(25, 104, 70, .08);
 }
 
 * {
@@ -25,7 +35,10 @@ body {
   min-height: 100vh;
   height: 100%;
   overflow: hidden;
-  background: #f4f7fb;
+  background:
+    radial-gradient(circle at 78% -18%, rgba(166, 230, 190, .48), transparent 38%),
+    radial-gradient(circle at 2% 92%, rgba(205, 242, 218, .5), transparent 32%),
+    linear-gradient(135deg, #f3fcf7 0%, #eaf7f0 100%);
 }
 
 button,
