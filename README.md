@@ -8,18 +8,20 @@ Windows 本地优先的动漫图片管理工具：**角色识别、相似度去�
 
 ### 用便携包（推荐）
 
-1. 解压 `dist_windows_gpu`（显卡版）或 `dist_windows`（CPU 版，体积更小）
+1. 解压匹配硬件的 `*-portable.zip`
 2. 双击根目录的 **`启动.bat`**（或直接双击 `anime-pic-manage.exe`）
-3. 按 `使用说明.txt` 走一遍：选图库目录 → 识别 → 人工矫正
+3. 首次打开到「设置 → 基础配置」准备独立 AI 环境；GPU 用户再准备 CUDA
+4. 按 `使用说明.txt` 走一遍：选图库目录 → 识别 → 人工矫正
 
-便携包自带 Python、推理引擎与模型，**目标机器不需要安装 Python / CUDA / 任何运行库**：
+程序本体、AI 环境、模型与 CUDA 分层管理。程序包保持轻量，环境只在首次使用或自身版本变化时下载；应用小更新不会重复下载 GB 级依赖：
 
 ```text
 AnimePicManage\
-├─ 启动.bat / anime-pic-manage.exe / 使用说明.txt   ← 根目录只有这三个入口
-├─ app\runtime\ai-worker.exe   内置推理引擎（不要删）
-├─ app\env\                    兼容运行环境（可删，省约 1.3GB）
-├─ app\cuda\                   显卡运行库：在设置页一键下载后出现在这里
+├─ 启动.bat / anime-pic-manage.exe / 使用说明.txt   ← 用户入口
+├─ BUILD_FLAVOR.txt                         构建类型标记（CPU/GPU）
+├─ app\runtime\ai-worker.exe   设置页独立准备的推理引擎
+├─ app\env\                    独立 Python/AI 环境
+├─ app\cuda\                   单独准备的显卡运行库
 ├─ models\recognizer\...       识别模型（可切换、可下载）
 ├─ resources\                  角色集合、生图工作流模板、模型清单
 ├─ data\                       数据库、扫描结果、参考库、日志、下载的模型缓存（hf-cache\）← 备份只需备份这一个
@@ -36,9 +38,9 @@ AnimePicManage\
 1. 双击 `AnimePicManage-<版本>-windows-x64-setup.exe`。这是 **NSIS 标准安装器**（不是自解压脚本），装卸行为与常见 Windows 软件一致，能明显减少安全软件误报。
 2. 首次安装会问语言（简体中文 / English），默认装到 `%LOCALAPPDATA%\Anime Pic Manage`——当前用户安装，不需要管理员权限，安装目录可写。
 3. **之前装过就会自动沿用原安装目录**（安装器把路径写进 `HKCU\Software\RoamerFly\Anime Pic Manage`，重装时读回），不用每次重新选。
-4. 安装后的目录结构与便携包一致：`anime-pic-manage.exe` + `app\`（推理运行时）+ `resources\` + `data\` / `models\` / `output\` / `temp\`。
+4. 安装包只带轻量程序与资源；首次打开在设置页准备 `app\` 里的 AI 环境，后续覆盖升级会复用它。
 
-安装版**不自带模型**（模型合计约 1.1GB，塞进安装包会超出发布平台的单文件上限）：装完打开「设置 → 模型配置」点下载即可；如果本机别处已经有这些模型，面板会显示「复制到软件目录」，一键搬进来，不用重新下载。
+安装版**不自带 AI 环境、模型和约 2.1GB 的 CUDA DLL**：装完打开「基础配置」一键准备匹配 CPU/GPU 的 AI 环境与 CUDA，再到「模型配置」按需下载模型。如果本机已有模型缓存，可以一键复制。Release 同时提供独立运行时与 CUDA 分包供离线部署。
 
 **卸载**：从 Windows 的「设置 → 应用」卸载，或运行安装目录里的 `uninstall.exe`。卸载向导第一步就是清理范围：
 
@@ -145,7 +147,7 @@ caption 采用社区写法：质量前缀 + 触发词 + Danbooru 标签，逗号
 
 | Tab | 内容 |
 | --- | --- |
-| 基础配置 | 运行方式、推理设备、**CUDA 运行时目录（含一键下载）**、后台任务优先级、界面字号、环境状态检查 |
+| 基础配置 | 运行方式、推理设备、**CUDA 运行时目录（含一键下载）**、网络代理、后台任务优先级、界面字号、环境状态检查 |
 | 识别配置 | ONNX 推理线程数、跳过已标注、**参考图识别（开关/后端/建库）** |
 | 相似度配置 | 并行度、默认阈值、是否含子目录、归档目录名 |
 | 模型配置 | **所有内置 / 可下载 / 已缓存的模型**：角色识别、头部检测、WD14 打标、CCIP 参考匹配；可下载、删除、把某个识别模型设为「当前识别模型」，显示模型目录与缓存目录（固定在 `data\hf-cache\`），能把本机已有的旧缓存一键复制进来 |
@@ -224,7 +226,8 @@ caption 采用社区写法：质量前缀 + 触发词 + Danbooru 标签，逗号
 | 现象 | 处理 |
 | --- | --- |
 | 设置保存后不生效 | 保存是手动点击右上角「保存」；保存后看一眼状态提示。旧版本存在半写库问题，已修复 |
-| GPU 版仍跑 CPU | 设置 → 基础配置看「CUDA 运行时」缺哪些 DLL，直接点**一键下载 CUDA 运行时**（约 1.4GB，落到 `app\cuda`），不需要装系统 CUDA |
+| GPU 版仍跑 CPU | 先在设置 → 基础配置准备 GPU AI 环境与 CUDA 12 / cuBLAS / cuFFT / cuDNN 9，再看「CUDA 实测」的具体错误；CUDA 约 2.1GB，落到 `app\cuda`，应用升级会复用 |
+| CUDA/模型下载失败 | 设置 → 基础配置 → 网络代理默认是 `127.0.0.1:7890`；确认本机代理端口一致，或清空后保存以直连。该设置同时作用于 CUDA 下载、模型下载和 Worker |
 | 启动 ComfyUI 报未配置目录 | 设置 → 生图配置重新选目录并**保存**；确认目录里同时有 `ComfyUI\main.py` 与 `python\python.exe` |
 | 停止按钮点了没反应/变灰 | 现在只要 ComfyUI 在运行就能停；手动启动的实例会按端口找到 Python 进程后结束，其他程序占用端口时会拒绝并提示 |
 | 工作流报节点缺失 | 该模板用了未安装的自定义节点（ControlNet、IPAdapter 等），在 ComfyUI 里装好对应插件后重试 |
@@ -240,15 +243,15 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
 uv run --project apps/ai-worker --extra model --extra detector --extra dev python -m pytest apps/ai-worker/tests -q
 
 build.bat              # CPU 便携包 -> dist_windows
-build_gpu.bat          # CUDA 便携包 -> dist_windows_gpu（全量，含 CUDA 版 ONNX Runtime）
+build_gpu.bat          # CUDA 便携包 -> dist_windows_gpu（全量，含 GPU Worker 与 CUDA/cuDNN DLL）
 build_gpu_fast.bat     # 复用 GPU 环境，只重建程序与 Worker（改界面/逻辑时用这个）
 build_installer.bat        # 标准 Windows 安装器 -> dist_windows\installer（需先有便携包）
 build_installer.bat --gpu  # GPU 版安装器（读 dist_windows_gpu）
 ```
 
-打包脚本会保留已有的 `data\` 与 `output\`，并对内置推理引擎与兼容环境分别执行健康与能力探针。
+打包脚本会保留已有的 `data\` 与 `output\`，先在完整构建目录中对独立 Worker 与兼容环境分别执行健康/能力探针，再把程序、AI 环境、模型和 CUDA 拆成独立 Release 资产。GPU 环境从 NVIDIA 官方 PyPI wheel 准备 CUDA 12、cuBLAS、cuFFT、cuDNN 9 与许可文件，必须通过 DLL 加载实测；安装后由设置页管理，应用更新不会重复下载。
 
-架构边界：桌面端（Tauri/Rust）负责 IPC、任务生命周期与文件安全，Python Worker 负责推理，模型权重不进入 Git；ComfyUI（GPL-3.0）与 kohya 一律外置调用，NVIDIA 运行库按需下载而非随包分发。
+架构边界：桌面端（Tauri/Rust）负责 IPC、任务生命周期与文件安全，Python Worker 负责推理，模型权重不进入 Git；ComfyUI（GPL-3.0）与 kohya 一律外置调用。CPU 包按需下载 NVIDIA 运行库，GPU 包在构建时从官方 PyPI wheel 准备，并保留随包许可文件。
 
 ## 文档索引
 

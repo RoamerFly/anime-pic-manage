@@ -4,11 +4,11 @@ use crate::database::{
 };
 use crate::ipc::{core_error, failure, normalize_request_id, success, IpcEnvelope, IpcError};
 use crate::models::is_supported_preview_image;
+use crate::path_utils::canonicalize_for_user;
 use crate::state::AppState;
 use crate::worker_runtime;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::State;
 
@@ -27,7 +27,7 @@ fn validate_annotation_image_path(path: &str) -> Result<PathBuf, AnnotationPathE
     if !candidate.is_absolute() {
         return Err(("INVALID_IMAGE_PATH", "图片路径必须是绝对路径。", None));
     }
-    let file = fs::canonicalize(candidate).map_err(|error| {
+    let file = canonicalize_for_user(candidate).map_err(|error| {
         (
             "INVALID_IMAGE_PATH",
             "无法访问指定图片。",

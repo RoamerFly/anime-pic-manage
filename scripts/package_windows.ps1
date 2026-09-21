@@ -1,8 +1,8 @@
 param(
     [string]$ProjectRoot,
     # Build the portable runtime with the CUDA-enabled ONNX Runtime build.
-    # The target machine still needs a matching NVIDIA driver plus CUDA/cuDNN
-    # runtime libraries; CPU execution stays available as a fallback.
+    # The target machine only needs a compatible NVIDIA driver. CUDA/cuDNN
+    # runtime DLLs are prepared inside app\cuda; CPU remains the fallback.
     [switch]$Cuda,
     # Output folder name directly under the project root.
     [string]$DistName = "dist_windows",
@@ -235,6 +235,11 @@ if (-not $ReuseEnvironment) {
 
 Write-Host "[portable] Copying desktop, Worker source, models, and resources..."
 Copy-Item -LiteralPath $DesktopExe -Destination (Join-Path $Dist "anime-pic-manage.exe") -Force
+[IO.File]::WriteAllText(
+    (Join-Path $Dist "BUILD_FLAVOR.txt"),
+    $(if ($Cuda) { "gpu" } else { "cpu" }),
+    (New-Object System.Text.UTF8Encoding($false))
+)
 New-Item -ItemType Directory -Path $RuntimeRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $CudaRoot -Force | Out-Null
 # `app\cuda` is where the in-app "download CUDA runtime" action lands. The
@@ -244,6 +249,11 @@ New-Item -ItemType Directory -Path $CudaRoot -Force | Out-Null
 $cudaNoteName = ([char]0x8BF4) + ([char]0x660E) + ".txt"                    # 说明.txt
 Copy-Item -LiteralPath (Join-Path $Root "resources\portable\cuda-$cudaNoteName") `
     -Destination (Join-Path $CudaRoot $cudaNoteName) -Force
+if ($Cuda) {
+    Write-Host "[portable] Preparing the bundled CUDA 12 / cuDNN 9 runtime..."
+    & (Join-Path $Root "scripts\prepare_cuda_runtime.ps1") `
+        -TargetDirectory $CudaRoot -ReuseExisting:$ReuseEnvironment
+}
 Copy-Item -LiteralPath $WorkerExe -Destination $PackagedWorkerExe -Force
 New-Item -ItemType Directory -Path (Join-Path $EnvRoot "worker") -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $WorkerRoot "run_worker.py") -Destination (Join-Path $EnvRoot "worker\run_worker.py") -Force
@@ -268,7 +278,8 @@ function Invoke-WorkerJsonProbe {
         [Parameter(Mandatory = $true)][string]$Request,
         [Parameter(Mandatory = $true)][string]$ExpectedRequestId,
         [Parameter(Mandatory = $true)][string]$ExpectedTaskId,
-        [string[]]$Arguments = @()
+        [string[]]$Arguments = @(),
+        [hashtable]$Environment = @{}
     )
     $startInfo = [Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = $Executable
@@ -283,6 +294,9 @@ function Invoke-WorkerJsonProbe {
     # preamble to the child's stdin, and ProcessStartInfo has no
     # StandardInputEncoding there. The Worker accepts a leading BOM instead.
     $startInfo.WorkingDirectory = (Get-Item -LiteralPath $Executable).DirectoryName
+    foreach ($entry in $Environment.GetEnumerator()) {
+        $startInfo.EnvironmentVariables[[string]$entry.Key] = [string]$entry.Value
+    }
     # Use the legacy Arguments property for compatibility with both PowerShell
     # 5 and pwsh hosts. Worker paths cannot contain quotes, so this is safe for
     # the portable launcher path and still handles spaces in its parent dirs.
@@ -361,27 +375,34 @@ $capabilitiesRequestId = "capability-" + [char]0x4e2d + [char]0x6587
 $capabilitiesTaskId = [char]0x4efb + [char]0x52a1 + "-" + [char]0x4e2d + [char]0x6587
 $capabilitiesRequest = '{"schema_version":"1.0","request_id":"' + $capabilitiesRequestId + '","task_id":"' + $capabilitiesTaskId + '","message_type":"runtime.capabilities","payload":{},"error":null}'
 Write-Host "[portable] Verifying independent Worker health and runtime capabilities..."
-$exeHealth = Invoke-WorkerJsonProbe -Executable $PackagedWorkerExe -Request $healthRequest -ExpectedRequestId $healthRequestId -ExpectedTaskId $healthTaskId
+$probeEnvironment = if ($Cuda) { @{ ANIME_PIC_CUDA_RUNTIME_DIR = $CudaRoot } } else { @{} }
+$exeHealth = Invoke-WorkerJsonProbe -Executable $PackagedWorkerExe -Request $healthRequest -ExpectedRequestId $healthRequestId -ExpectedTaskId $healthTaskId -Environment $probeEnvironment
 if ($exeHealth.status -ne "ok" -and $exeHealth.status -ne "stopping") {
     throw "Independent Worker health check failed: $($exeHealth.status)"
 }
-$exeCapabilities = Invoke-WorkerJsonProbe -Executable $PackagedWorkerExe -Request $capabilitiesRequest -ExpectedRequestId $capabilitiesRequestId -ExpectedTaskId $capabilitiesTaskId
+$exeCapabilities = Invoke-WorkerJsonProbe -Executable $PackagedWorkerExe -Request $capabilitiesRequest -ExpectedRequestId $capabilitiesRequestId -ExpectedTaskId $capabilitiesTaskId -Environment $probeEnvironment
 Assert-WorkerCapabilities -Payload $exeCapabilities -Label "Independent Worker"
 if ($Cuda -and -not $exeCapabilities.compute.cuda_available) {
     throw "CUDA build did not expose the CUDA execution provider: $($exeCapabilities.compute.available_providers -join ', ')"
+}
+if ($Cuda -and -not $exeCapabilities.compute.cuda_usable) {
+    throw "Bundled CUDA runtime could not be loaded: $($exeCapabilities.compute.cuda_runtime.message)"
 }
 
 Write-Host "[portable] Verifying ENV Worker health and runtime capabilities..."
 $envPython = Join-Path $EnvRoot "Scripts\python.exe"
 $envLauncher = Join-Path $EnvRoot "worker\run_worker.py"
-$envHealth = Invoke-WorkerJsonProbe -Executable $envPython -Arguments @($envLauncher) -Request $healthRequest -ExpectedRequestId $healthRequestId -ExpectedTaskId $healthTaskId
+$envHealth = Invoke-WorkerJsonProbe -Executable $envPython -Arguments @($envLauncher) -Request $healthRequest -ExpectedRequestId $healthRequestId -ExpectedTaskId $healthTaskId -Environment $probeEnvironment
 if ($envHealth.status -ne "ok" -and $envHealth.status -ne "stopping") {
     throw "ENV Worker health check failed: $($envHealth.status)"
 }
-$envCapabilities = Invoke-WorkerJsonProbe -Executable $envPython -Arguments @($envLauncher) -Request $capabilitiesRequest -ExpectedRequestId $capabilitiesRequestId -ExpectedTaskId $capabilitiesTaskId
+$envCapabilities = Invoke-WorkerJsonProbe -Executable $envPython -Arguments @($envLauncher) -Request $capabilitiesRequest -ExpectedRequestId $capabilitiesRequestId -ExpectedTaskId $capabilitiesTaskId -Environment $probeEnvironment
 Assert-WorkerCapabilities -Payload $envCapabilities -Label "ENV Worker"
 if ($Cuda -and -not $envCapabilities.compute.cuda_available) {
     throw "CUDA compatibility env did not expose the CUDA execution provider."
+}
+if ($Cuda -and -not $envCapabilities.compute.cuda_usable) {
+    throw "Bundled CUDA runtime is not usable from the compatibility env."
 }
 
 if (Test-Path -LiteralPath $PythonInstall) {

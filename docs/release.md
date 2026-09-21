@@ -8,16 +8,17 @@
 
 | 路径 | 产物 | 模型 | 适合谁 |
 | --- | --- | --- | --- |
-| 安装版 | `AnimePicManage-<版本>-windows-x64-setup.exe`（NSIS） | 装完在应用内按需下载 | 想装完就用、走「设置 → 应用」卸载 |
-| 便携包 | `*-portable.zip` + `*-models.zip` | 模型包解压到同一目录 | 需要整包带走、放到 U 盘/移动硬盘 |
+| CPU 安装版 | `AnimePicManage-<版本>-windows-x64-setup.exe`（NSIS） | 装完在应用内按需下载 | 体积小、没有 NVIDIA 显卡或接受 CPU 推理 |
+| GPU 安装版 | `*-windows-x64-gpu-setup.exe`（NSIS） | GPU Worker；CUDA/cuDNN 与模型按需准备 | NVIDIA 显卡用户，小体积安装后在设置页一键准备 |
+| 便携包 | `*-portable.zip` + 独立 runtime/模型/CUDA 分包 | 程序小更新与大型环境分离 | 需要整包带走、放到 U 盘/移动硬盘 |
 
-两条路径的程序目录结构一致：`anime-pic-manage.exe` + `app\`（推理运行时与兼容环境）+ `resources\` + `data\` / `models\` / `output\` / `temp\`。所有运行数据都在软件目录内，删目录即彻底卸载。
+两条路径的存储结构一致：轻量程序在根目录（另有 `BUILD_FLAVOR.txt` 构建标记），独立 AI 环境在 `app\runtime` / `app\env`，CUDA 在 `app\cuda`，模型与用户数据分别位于 `models\`、`data\`、`output\`。应用覆盖升级只替换程序本体，不删除已安装环境和用户数据。
 
-### 为什么安装版不带模型
+### 为什么安装版不带环境和模型
 
-模型合计约 1.1GB，塞进安装包会超过 GitHub Release 单文件 2GB 的上限，也会让每次升级都重下模型。安装版因此只带程序与推理运行时，模型交给「设置 → 模型配置」按需下载；如果本机别处已有缓存（`HF_HOME`、`%USERPROFILE%\.cache\huggingface` 等），同一面板会出现「复制到软件目录」按钮，一键迁移且不删除源目录。
+AI/Python 环境与模型合计数 GB，塞进安装包会触及 NSIS/GitHub 单文件上限，也会让每次应用升级都重下依赖。安装版因此只带程序本体；AI 环境由“基础配置”按 CPU/GPU 类型独立安装并用 SHA-256 校验，模型由“模型配置”按需下载。发现本机已有缓存时只复制、不删除源目录。
 
-便携包同理拆成「程序包 + 可选模型包」，两个压缩包解压到同一目录即可离线使用；CPU 与 GPU 共用同一个模型包。
+便携发行拆成「轻量程序包 + CPU/GPU runtime 包 + 可选模型包 + GPU CUDA 包」。在线使用可由设置页自动下载、断点续传、校验并原子切换；离线使用将对应分包解压到同一目录。CPU 与 GPU 共用模型包。本地 `dist_windows_gpu` 仍是用于构建验收的完整目录。
 
 ## 安装器行为
 
@@ -43,7 +44,7 @@ build_installer.bat        # 从 dist_windows 生成安装器 -> dist_windows\in
 build_installer.bat --gpu  # 从 dist_windows_gpu 生成安装器
 ```
 
-`scripts/package_installer_windows.ps1` 会把便携包里的 `app\runtime` 与 `resources` 暂存到 `src-tauri\installer-payload`，再用 `tauri build --config <临时覆盖>` 声明资源映射（资源不写进 `tauri.conf.json`，这样 `cargo test`、`tauri dev` 和便携包构建都不依赖暂存目录）。
+`scripts/package_installer_windows.ps1` 只把 `resources` 与 CPU/GPU 构建标记暂存到 `src-tauri\installer-payload`，不再内嵌 AI 环境或 CUDA。随后用 `tauri build --config <临时覆盖>` 声明资源映射；环境作为带版本、SHA-256 的独立 Release 资产由应用管理。
 
 带 `TAURI_SIGNING_PRIVATE_KEY` 时同时产出更新签名（`*-setup.exe.sig`）；没有私钥时只出普通安装器，不会失败。
 
@@ -53,7 +54,7 @@ build_installer.bat --gpu  # 从 dist_windows_gpu 生成安装器
 
 - 触发：推送 `v*.*.*` 标签，或手动 `workflow_dispatch`（可指定版本、是否含 GPU、是否真的建 Release）。
 - 前置：缺少 `TAURI_SIGNING_PRIVATE_KEY` 直接失败并提示去配置 Secrets。
-- 步骤：检查工作区（`pnpm lint` / `pnpm test`）→ 按标签版本改写 `tauri.conf.json` / `Cargo.toml` / `package.json` 版本 → 构建 CPU 便携包 → 构建 CPU 安装器 → 可选构建 GPU 两件套 → 汇总资产（`setup.exe`、`portable.zip`、`models.zip`、GPU 两份、`latest.json`）→ 创建或追加 Release。
+- 步骤：检查工作区 → 注入统一版本 → 构建完整验收目录 → 生成轻量安装器/程序包 → 生成 CPU/GPU runtime、模型、CUDA 独立分包及 SHA-256 → 汇总 `latest.json` → 创建或追加 Release。
 - `latest.json` 由工作流按签名文件生成，字段与应用内更新端点（`releases/latest/download/latest.json`）一致。
 - 关闭 `publish` 时只跑构建并把资产上传为 Artifact，可用于发布前干跑。
 

@@ -1,6 +1,7 @@
 use crate::database::{WORKER_COMPUTE_DEVICE_SETTING, WORKER_RUNTIME_MODE_SETTING};
 use crate::ipc::{core_error, failure, normalize_request_id, success, IpcEnvelope};
 use crate::models::{RuntimeStatus, WorkerHealth, WorkerRuntimeSettings};
+use crate::path_utils::display_path;
 use crate::state::AppState;
 use crate::worker_runtime::{
     WorkerCapabilitiesInfo, WorkerComputeDevice, WorkerManager, WorkerRuntimeMode,
@@ -284,9 +285,7 @@ fn worker_runtime_settings(worker: &WorkerManager) -> WorkerRuntimeSettings {
     WorkerRuntimeSettings {
         mode: mode.as_str().to_string(),
         mode_label: mode.label().to_string(),
-        resolved_path: worker
-            .runtime_path()
-            .map(|path| path.to_string_lossy().into_owned()),
+        resolved_path: worker.runtime_path().map(|path| display_path(&path)),
         compute_device: compute_device.as_str().to_string(),
         compute_device_label: compute_device.label().to_string(),
     }

@@ -1,6 +1,7 @@
 use crate::database::{self, Database};
 use crate::ipc::{core_error, failure, normalize_request_id, success, IpcEnvelope};
 use crate::models::allow_asset_directory;
+use crate::path_utils::canonicalize_for_user;
 use crate::result_store::{self, ResultKind};
 use crate::state::{AppState, ScanControl, ScanControlResponse};
 use crate::worker_runtime::{self, WorkerManager};
@@ -449,7 +450,7 @@ pub async fn scan_similarity_preview(
         ));
     }
 
-    let directory = match fs::canonicalize(candidate) {
+    let directory = match canonicalize_for_user(candidate) {
         Ok(dir) if dir.is_dir() => dir,
         Ok(_) => {
             return Ok(failure(

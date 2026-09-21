@@ -15,6 +15,8 @@ pnpm --filter @anime-pic-manage/desktop tauri:dev
 
 ## Worker 健康检查失败
 
+首次启动会载入较大的 Python/ONNX 依赖，超过 30 秒时界面会保持“AI 推理环境正在启动”，并在后台等待同一次检查完成，不需要反复点击刷新。如果长时间没有进展，再检查杀毒软件隔离、磁盘占用和下方 Worker 路径。
+
 确认 Python 3.11 与 uv 可用：
 
 ```powershell
@@ -49,9 +51,10 @@ uv sync --directory apps/ai-worker
 在“设置 → 推理运行环境”确认两件事：运行能力里是否列出 `CUDAExecutionProvider`，以及“推理设备”选择的是“自动”还是“NVIDIA CUDA”。
 
 - 只列出 `CPUExecutionProvider`：当前运行时是 CPU 版 ONNX Runtime，需要用 `-Cuda` 重新打包，或在 Worker 虚拟环境自行安装 `onnxruntime-gpu`。
-- 列出 CUDA 但仍回退 CPU：看“基础配置 → 环境状态检查”里的 **CUDA 运行时** 一行。它会把缺失的动态库逐个点名（`cudart64_12.dll`、`cublas64_12.dll`、`cublasLt64_12.dll`、`cudnn64_9.dll`）——`onnxruntime-gpu` 只要求“编译时带 CUDA”，本机没有 CUDA 12 + cuDNN 9 时照样列出 `CUDAExecutionProvider`，然后静默跑 CPU。装上对应运行时并把目录加进 PATH（或改用本应用 `dist_windows_gpu` 之外的方式部署运行库）即可。
-- **最省事的修法**：在“基础配置 → 推理运行环境”里点「一键下载 CUDA 运行时」（约 1.4GB）。应用会从 PyPI 取 NVIDIA 官方的 `nvidia-cuda-runtime-cu12` / `nvidia-cublas-cu12` / `nvidia-cufft-cu12` / `nvidia-cudnn-cu12`，把 DLL 解压到 `app\cuda\` 并自动设为运行时目录，不需要在系统里装 CUDA，也不需要改 PATH。
+- 列出 CUDA 但仍回退 CPU：看“基础配置 → 环境状态检查”里的 **CUDA 运行时** 一行。它会把缺失的动态库逐个点名（`cudart64_12.dll`、`cublas64_12.dll`、`cublasLt64_12.dll`、`cudnn64_9.dll`）——`onnxruntime-gpu` 只要求“编译时带 CUDA”，DLL 或 NVIDIA 驱动不可用时仍可能回退 CPU。GPU 包应已在 `app\cuda` 内备齐运行库；先确认该目录没有被杀毒软件隔离，再更新 NVIDIA 驱动。
+- CPU 包需要 GPU 加速时，可在“基础配置 → 推理运行环境”里点「一键下载 CUDA 运行时」（约 2.1GB）。应用会从 PyPI 取 NVIDIA 官方的 `nvidia-cuda-runtime-cu12` / `nvidia-cublas-cu12` / `nvidia-cufft-cu12` / `nvidia-cudnn-cu12`，把 DLL 解压到 `app\cuda\` 并自动设为运行时目录，不需要安装系统 CUDA，也不需要改 PATH。
 - 也可以用“CUDA 实测”一行确认：它会用已安装模型真正加载一次会话，只有会话真的用了 `CUDAExecutionProvider` 才算通过。
+- CUDA 或模型下载失败时，检查“设置 → 基础配置 → 网络代理”。默认值是 `127.0.0.1:7890`；请确认代理程序正在监听该端口，端口不一致就修改，想直连则清空并保存。
 - 报错“模型未声明 CUDA 支持”：对应模型的 `metadata.json` 里 `supported_devices` 缺少 `cuda`，补齐后重新检查即可。
 - 相似度扫描没有 GPU 选项是预期行为：该流水线是 CPU 感知哈希/直方图算法，优化方向是多核提取与聚类，而不是显卡加速。
 

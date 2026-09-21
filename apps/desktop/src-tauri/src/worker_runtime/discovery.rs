@@ -225,6 +225,12 @@ pub fn resource_models_root(resource_dir: &Path, fallback: &Path) -> PathBuf {
     // folder does not exist yet: a fresh install downloads them on demand from
     // 设置 → 模型配置, and they must land inside the application folder.
     if is_packaged_layout(resource_dir) {
+        if let Some(root) = resource_roots(resource_dir)
+            .into_iter()
+            .find(|root| root.join("BUILD_FLAVOR.txt").is_file() || root.join("app").is_dir())
+        {
+            return root.join("models");
+        }
         return resource_dir.join("models");
     }
     fallback.to_path_buf()
@@ -233,6 +239,10 @@ pub fn resource_models_root(resource_dir: &Path, fallback: &Path) -> PathBuf {
 /// True when `resource_dir` is a released package (`app\` next to the program).
 pub fn is_packaged_layout(resource_dir: &Path) -> bool {
     resource_dir.join("app").is_dir()
+        || resource_dir.join("BUILD_FLAVOR.txt").is_file()
+        || resource_dir
+            .parent()
+            .is_some_and(|parent| parent.join("BUILD_FLAVOR.txt").is_file())
 }
 
 pub fn resource_roots(resource_dir: &Path) -> Vec<PathBuf> {

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { WorkerStatus } from "@anime-pic-manage/shared-types";
 import { isScanActive } from "../lib/scan-state";
+import { normalizeDisplayPath } from "../lib/tauri";
 import type { WorkspaceProps } from "../types";
 
 export function workerLabel(status: WorkerStatus): string {
@@ -86,7 +87,9 @@ export function WorkspacePage({
           <div>
             <span>当前图库</span>
             <strong>{library?.display_name ?? "尚未选择"}</strong>
-            <small>{library?.path ?? "选择目录后开始"}</small>
+            <small>
+              {library?.path ? normalizeDisplayPath(library.path) : "选择目录后开始"}
+            </small>
           </div>
           <div>
             <span>推理引擎</span>
@@ -145,7 +148,9 @@ export function WorkspacePage({
               <small>
                 {active && progress?.path
                   ? progress.path
-                  : library?.path ?? "尚未选择图库"}
+                  : library?.path
+                    ? normalizeDisplayPath(library.path)
+                    : "尚未选择图库"}
               </small>
               {active && (
                 <div className="workspace-progress-inline">
@@ -271,7 +276,7 @@ export function WorkspacePage({
           <div className="recent-scan-summary">
             <div>
               <span>图库</span>
-              <strong>{recentScan.directory}</strong>
+              <strong>{normalizeDisplayPath(recentScan.directory)}</strong>
             </div>
             <div>
               <span>处理进度</span>

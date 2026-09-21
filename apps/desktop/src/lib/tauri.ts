@@ -70,7 +70,7 @@ export function isTauriRuntime(): boolean {
   return "__TAURI_INTERNALS__" in globalThis;
 }
 
-export function normalizePreviewPath(path: string): string {
+export function normalizeDisplayPath(path: string): string {
   if (/^\\\\\?\\UNC\\/i.test(path)) {
     return `\\\\${path.slice(8)}`;
   }
@@ -78,4 +78,8 @@ export function normalizePreviewPath(path: string): string {
     return path.slice(4);
   }
   return path;
+}
+
+export function normalizePreviewPath(path: string): string {
+  return normalizeDisplayPath(path);
 }

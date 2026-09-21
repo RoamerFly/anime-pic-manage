@@ -6,6 +6,7 @@ pub mod ipc;
 pub mod kohya;
 pub mod kohya_runner;
 pub mod models;
+pub mod path_utils;
 pub mod portable;
 pub mod result_store;
 pub mod state;
@@ -87,7 +88,11 @@ pub fn init_state(app: &tauri::App) -> Result<AppState, CoreInitError> {
         compute_device,
         app_settings.recognition_onnx_threads,
     );
-    worker.set_cuda_runtime_dir(Some(app_settings.cuda_runtime_dir.clone()));
+    worker.set_cuda_runtime_dir(portable::effective_cuda_runtime_dir(
+        &data_dir,
+        &app_settings.cuda_runtime_dir,
+    ));
+    worker.set_network_proxy(app_settings::proxy_url(&app_settings.network_proxy));
     worker.set_data_dir(Some(data_dir.to_string_lossy().into_owned()));
     worker.set_below_normal_priority(app_settings.background_priority != "normal");
     let state = AppState::new(database, data_dir.to_string_lossy().into_owned(), worker);
@@ -118,6 +123,8 @@ pub fn run() {
             set_worker_compute_device,
             get_app_settings,
             update_app_settings,
+            worker_environment_status,
+            install_worker_environment,
             comfy_status,
             comfy_start,
             comfy_stop,
